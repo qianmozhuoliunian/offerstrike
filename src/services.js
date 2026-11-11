@@ -27,7 +27,10 @@ export function searchRequest(role, company, requirements, range, now = new Date
   const months = { '3m': 3, '6m': 6, year: 12 };
   if (range !== 'all' && !months[range]) throw Error('不支持的时间范围');
   if (source !== 'all' && !Object.hasOwn(SEARCH_SOURCES, source)) throw Error('不支持的搜索来源');
-  const query = `${role} 面经 面试经验 ${String(company || '').slice(0, 100)} ${String(requirements || '').slice(0, 800)}`;
+  const companyText = String(company || '').trim();
+  if (companyText.length > 100) throw Error('公司关键词不能超过 100 字');
+  const requirementPrefix = Array.from(String(requirements || '')).slice(0, 800).join('');
+  const query = `${role} 面经 面试经验 ${companyText} ${requirementPrefix}`;
   const request = { query, search_depth: 'basic', max_results: 15, include_answer: false, include_raw_content: false, include_published_date: true };
   request.include_domains = source === 'all' ? Object.values(SEARCH_SOURCES) : [SEARCH_SOURCES[source]];
   if (months[range]) {

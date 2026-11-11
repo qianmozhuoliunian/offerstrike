@@ -35,6 +35,14 @@ test('search uses a real date range and requests estimated dates', () => {
   assert.throws(() => searchRequest('产品','','','unknown',now),/时间范围/);
 });
 
+test('search sends at most 800 complete role-requirement characters and rejects an overlong company', () => {
+  const requirements='要'.repeat(799)+'😀'+'末尾';
+  const query=searchRequest('产品经理','示例公司',requirements,'all').query;
+  assert.ok(query.endsWith('要'.repeat(799)+'😀'));
+  assert.ok(!query.includes('末尾'));
+  assert.throws(()=>searchRequest('产品经理','公'.repeat(101),'','all'),/公司关键词不能超过 100/);
+});
+
 test('search limits platforms to the selected trusted domains', () => {
   const now=new Date('2026-05-31T12:00:00Z');
   assert.deepEqual(searchRequest('产品','','','all',now).include_domains,['nowcoder.com','juejin.cn','zhihu.com']);

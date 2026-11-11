@@ -168,6 +168,9 @@
               </button>
             </form>
 
+            <p class="role-validation-disclosure">保存岗位时，可能会将岗位名称发送给已配置的 AI 服务辅助判断；不会发送岗位描述、回答或历史记录。</p>
+            <p id="role-validation-status" class="role-validation-status" role="status" aria-live="polite" hidden></p>
+
             <div class="quick-chips-group">
               <span class="chips-label">快捷选择（点击立即保存）</span>
               <button type="button" class="preset-chip" data-role="产品经理">产品经理</button>
@@ -229,7 +232,7 @@
               <div class="form-group">
                 <label for="company">目标公司 <span class="label-hint">选填</span></label>
                 <div class="input-container">
-                  <input id="company" placeholder="例如：字节跳动、腾讯、美团、拼多多" autocomplete="off">
+                  <input id="company" maxlength="100" placeholder="例如：字节跳动、腾讯、美团、拼多多" autocomplete="off">
                 </div>
               </div>
               <div class="form-group">
@@ -267,9 +270,11 @@
             </div>
           </form>
 
+          <p class="search-privacy">搜索会将目标岗位、公司和已确认岗位要求发送给 Tavily。岗位要求最多发送前 800 个字符，不足时全部发送。</p>
+
           <div id="search-status" class="status-banner info" aria-live="polite">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-            <span>搜索结果在本页展示，需要配置 Tavily；岗位、公司及已确认的岗位要求会发送给该服务。</span>
+            <span>搜索结果在本页展示，需要配置 Tavily。</span>
           </div>
           <div id="results" class="results-stream"></div>
         </section>

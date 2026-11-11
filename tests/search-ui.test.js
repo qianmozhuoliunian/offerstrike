@@ -20,11 +20,22 @@ function harness() {
   const toast = {success:message=>messages.push(message),error:message=>messages.push(message)};
   const openSourceQuestionEditor=async (id,role)=>opened.push({id,role});
   const context=vm.createContext({AbortController,api,toast,openSourceQuestionEditor,escapeHtml:s=>String(s ?? ''),$:s=>elements[s],refresh:async()=>{},window:{}});
-  vm.runInContext(`let state={role:'岗位甲'}; let searchBatch=null; let searchRequestId=0; let searchController=null; let searchButtonMarkup=''; ${invalidation}\n${searchHandlers}`,context);
+  vm.runInContext(`let state={role:'岗位甲'}; let searchBatch=null; let searchRequestId=0; let searchController=null; let searchButtonMarkup=''; let searchNeedsRoleCheck=false; ${invalidation}\n${searchHandlers}`,context);
   return {context,handlers,calls,messages,button,status,results,opened};
 }
 
 const targetFor=(selector,button)=>({closest:query=>query===selector ? button : null});
+
+test('an old unverified role is directed to role settings before any search request', async () => {
+  const h=harness();
+  vm.runInContext("state.roleValidation='unverified'",h.context);
+  await h.handlers['form:submit']({preventDefault(){}});
+  assert.equal(h.calls.length,0);
+  assert.match(h.status.innerHTML,/尚未核对/);
+  assert.match(h.status.innerHTML,/data-tab="role"/);
+  vm.runInContext("state.role='岗位乙'; state.roleValidation='valid'; invalidateSearchForRoleChange()",h.context);
+  assert.match(h.status.textContent,/目标岗位已更新/);
+});
 
 test('search results and saved sources remain bound to their original role', async () => {
   const h=harness();
@@ -43,7 +54,7 @@ test('search results and saved sources remain bound to their original role', asy
   vm.runInContext("state.role='岗位乙'; invalidateSearchForRoleChange()",h.context);
   h.calls[1].resolve({id:'source'}); await saving;
   assert.match(h.messages.at(-1),/岗位甲/);
-  assert.match(h.status.textContent,/岗位已切换/);
+  assert.match(h.status.textContent,/岗位已更新/);
   assert.equal(h.results.innerHTML,'');
 });
 

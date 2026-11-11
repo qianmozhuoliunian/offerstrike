@@ -917,6 +917,8 @@
    margin-top: 6px;
  }
 
+ .search-privacy { margin-top: 12px; color: var(--lens-text-secondary); font-size: 12px; line-height: 1.6; }
+
  .results-stream {
    display: flex;
    flex-direction: column;
@@ -2315,6 +2317,8 @@ body { background: var(--lens-bg); }
 .role-target-panel #role-form { margin-top: 18px; align-items: stretch; }
 .role-target-panel #role { min-height: 46px; }
 .role-target-panel #role-form > button { min-width: 124px; }
+.role-validation-disclosure, .role-validation-status { margin-top: 10px; color: var(--lens-text-secondary); font-size: 12px; line-height: 1.6; }
+.role-validation-status { color: var(--lens-primary); }
 .role-target-panel .quick-chips-group { gap: 8px; margin-top: 18px; }
 .role-target-panel .chips-label { margin-right: 3px; color: var(--lens-text-secondary); }
 .role-target-panel .preset-chip { min-height: 34px; padding: 6px 12px; }

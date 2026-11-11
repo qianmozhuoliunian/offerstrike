@@ -29,6 +29,7 @@ import { createToast } from './ui/toast.js';
  let roleRevision = 0;
  let searchController = null;
  let searchButtonMarkup = '';
+ let searchNeedsRoleCheck = false;
  let helpRequestId = 0;
  let helpController = null;
  let recommendationRequestId = 0;
@@ -228,14 +229,20 @@ const toast = createToast(escapeHtml);
       renderQuestionContext();
    }
 
+   const displayRole = state.role ? state.role + (state.roleValidation === 'unverified' ? '（待核对）' : '') : '未设定';
+   const validationStatus = $('#role-validation-status');
+   if (validationStatus) {
+     validationStatus.hidden = state.roleValidation !== 'unverified';
+     validationStatus.textContent = validationStatus.hidden ? '' : '当前岗位尚未核对，请确认或修改后重新保存，再搜索面经。';
+   }
    const topbarRole = $('#topbar-role');
-   if (topbarRole) topbarRole.textContent = state.role || '未设定';
+   if (topbarRole) topbarRole.textContent = displayRole;
   const searchRole = $('#search-role-text');
-  if (searchRole) searchRole.textContent = state.role || '未设定';
+   if (searchRole) searchRole.textContent = displayRole;
 
    // Dashboard metric widgets
    const widgetRole = $('#widget-role-display');
-   if (widgetRole) widgetRole.textContent = state.role || '未设定';
+   if (widgetRole) widgetRole.textContent = displayRole;
 
    const widgetCount = $('#widget-count-display');
    if (widgetCount) widgetCount.textContent = state.sources.length;
@@ -506,19 +513,21 @@ const toast = createToast(escapeHtml);
  async function refresh() {
     const nextState = await api('/api/state');
     if (state.role !== nextState.role) { roleRevision++; invalidateSearchForRoleChange(); clearPracticeHelp(); clearRecommendationChoice(); }
+    else if (state.roleValidation !== nextState.roleValidation) invalidateSearchForRoleChange();
     state = nextState;
    render();
  }
 
  function invalidateSearchForRoleChange() {
-   if (!searchBatch && !searchController) return;
+   if (!searchBatch && !searchController && !searchNeedsRoleCheck) return;
+   searchNeedsRoleCheck = false;
    searchRequestId++;
    searchBatch = null;
    searchController?.abort();
    searchController = null;
    const results = $('#results'), status = $('#search-status'), button = $('#search-btn');
    if (results) results.replaceChildren();
-   if (status) { status.className = 'status-banner neutral'; status.textContent = '目标岗位已切换，请重新搜索面经。'; }
+   if (status) { status.className = 'status-banner neutral'; status.textContent = '目标岗位已更新，请重新搜索面经。'; }
    if (button) { button.disabled = false; button.innerHTML = searchButtonMarkup; }
  }
 
@@ -743,15 +752,24 @@ const toast = createToast(escapeHtml);
  async function saveRole(role) {
    if (roleSaveBusy || !canSwitchRole(role)) return;
    roleSaveBusy = true;
-   const controls = $$('#role-form button, .preset-chip');
+   const controls = $$('#role-form button, #role-form input, .preset-chip');
+   const roleStatus = $('#role-validation-status');
    controls.forEach(button => { button.disabled = true; });
+   if (roleStatus) { roleStatus.hidden = false; roleStatus.textContent = '正在核对岗位名称…'; }
    try {
      if (role !== state.role) await writeDraft();
-     await api('/api/role', 'POST', { role });
+     let result = await api('/api/role', 'POST', { role });
+     if (result.status === 'needs_confirmation') {
+       const confirmed = window.confirm(`${result.message}\n\n“${role}”确实是你准备应聘的岗位吗？确定后继续保存；取消可修改名称。`);
+       if (!confirmed) { if (roleStatus) roleStatus.textContent = '尚未保存，请补充或修改岗位名称。'; return; }
+       result = await api('/api/role', 'POST', { role, confirmation_token:result.confirmation_token });
+     }
+     if (result.status !== 'saved') throw Error('岗位未保存，请重试');
      await refresh();
      toast.success(`目标岗位已设定为「${role}」`);
      showRoleNext();
    } catch (err) {
+     if (roleStatus) { roleStatus.hidden = false; roleStatus.textContent = err.message; }
      toast.error(err.message);
    } finally {
      roleSaveBusy = false;
@@ -1193,6 +1211,13 @@ const toast = createToast(escapeHtml);
       const range = $('#range')?.value || 'year';
       const rangeLabel = ({year:'近一年','6m':'近半年','3m':'近三个月',all:'不限时间'})[range] || range;
       if (!role) { toast.error('请先设置并保存目标岗位'); return; }
+      if (state.roleValidation === 'unverified') {
+        searchNeedsRoleCheck = true;
+        const status = $('#search-status'), results = $('#results');
+        if (status) { status.className = 'status-banner neutral'; status.innerHTML = '<span>当前岗位尚未核对，请确认或修改后再搜索。</span><button type="button" class="text-link-action" data-tab="role">去核对岗位</button>'; }
+        if (results) results.replaceChildren();
+        return;
+      }
       const requestId = ++searchRequestId;
       searchController?.abort();
       const controller = new AbortController();

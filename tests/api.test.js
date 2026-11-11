@@ -17,7 +17,9 @@ test('HTTP workflow validates JD output, isolates roles, imports safely and reje
     const request=JSON.parse(body), jd=request.messages.at(-1).content;
     modelRequests.push(request);
     let content='已记录点评和追问';
-    if (request.messages[0].content.includes('岗位要求提取工具')) {
+    if (request.messages[0].content.includes('判断输入能否表示求职者')) {
+      content=JSON.stringify({status:'valid'});
+    } else if (request.messages[0].content.includes('岗位要求提取工具')) {
       assert.equal(request.response_format.type,'json_object');
       const result=jd.includes('数据分析') ? {status:'ok',items:[{requirement:'负责数据分析',evidence:'负责数据分析'}]} : {status:'insufficient',items:[]};
       content=JSON.stringify(result);

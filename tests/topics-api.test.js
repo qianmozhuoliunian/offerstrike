@@ -12,7 +12,7 @@ test('topic endpoints validate ownership and create question and topic atomicall
   const dir=await mkdtemp(join(tmpdir(),'interview-topic-'));
   const allocator=http.createServer(); await new Promise(resolve=>allocator.listen(0,'127.0.0.1',resolve));
   const port=allocator.address().port; await new Promise(resolve=>allocator.close(resolve));
-  const child=spawn(process.execPath,[fileURLToPath(new URL('../server.js',import.meta.url))],{cwd:dir,env:{...process.env,PORT:String(port)},stdio:['ignore','pipe','pipe']});
+  const child=spawn(process.execPath,[fileURLToPath(new URL('../server.js',import.meta.url))],{cwd:dir,env:{...process.env,PORT:String(port),AI_API_KEY:'',AI_MODEL:''},stdio:['ignore','pipe','pipe']});
   let output='', errors=''; child.stdout.on('data',c=>output+=c); child.stderr.on('data',c=>errors+=c);
   try {
     const deadline=Date.now()+10000;
@@ -22,7 +22,9 @@ test('topic endpoints validate ownership and create question and topic atomicall
     }
     const url=`http://127.0.0.1:${port}`;
     const send=(path,method,data)=>fetch(url+path,{method,headers:{'content-type':'application/json'},body:JSON.stringify(data)});
-    await send('/api/role','POST',{role:'产品'});
+    const uncertain=await (await send('/api/role','POST',{role:'产品'})).json();
+    assert.equal(uncertain.status,'needs_confirmation');
+    assert.equal((await send('/api/role','POST',{role:'产品',confirmation_token:uncertain.confirmation_token})).status,200);
     const source=await (await send('/api/sources','POST',{title:'面经',url:'https://example.com',role:'产品'})).json();
     const path=`/api/sources/${source.id}/questions`;
     const invalid=await send(path,'POST',{text:'测试题',topic:'x'.repeat(101)});

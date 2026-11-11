@@ -1,0 +1,1301 @@
+import { createToast } from './ui/toast.js';
+
+ /**
+  * 见面 · 面试准备助手 (Apple HIG Design System Implementation)
+  * Client Application Logic
+  */
+
+ const $ = s => document.querySelector(s);
+ const $$ = s => document.querySelectorAll(s);
+
+ let state = {
+   role: '',
+   sources: [],
+   attempts: [],
+   searchConfigured: false,
+   aiConfigured: false
+ };
+
+ let activeFilter = 'all';
+ let jdLoadedRole = null;
+ let draftLoadedRole = null;
+ let draftTimer;
+ let draftWrite = Promise.resolve();
+ let jdSaved = {jd:'', requirements:''};
+ let jdBusy = false;
+ let questionContext = null;
+ let searchBatch = null;
+ let searchRequestId = 0;
+ let searchController = null;
+ let searchButtonMarkup = '';
+ const noteDrafts = new Map();
+ const topicDrafts = new Map();
+
+ const tabTitles = {
+   dashboard: '备考工作台',
+   role: '岗位设置',
+   debrief: '真实面试复盘',
+   search: '发现面经',
+   practice: 'AI 复习追问',
+   library: '资料库',
+   settings: '偏好与状态'
+ };
+
+ const sampleQuestions = {
+   '产品经理': '如何评估一个新功能上线的成败？请结合指标体系、北极星指标与业务归因进行拆解。',
+   'Java 后端开发': '高并发场景下，如何保证分布式订单状态流转的幂等性与最终一致性？请说明核心技术选型。',
+   '前端开发工程师': '请结合真实项目阐述前端性能优化方案：包含网络传输、关键渲染路径、长任务卡顿治理与核心 Web Vitals 监控。',
+   'AI 算法/应用工程师': '在构建生产级 RAG 知识库系统时，如何解决多路召回排序不精准与大模型事实幻觉问题？',
+   '用户增长运营': '一个新活动的触达转化率极高但次留很低，你会如何通过漏斗分析与分群定位问题并制定改善策略？',
+   '项目经理 (PMO)': '当项目关键路径上的核心交付物面临严重逾期风险时，你如何做范围、资源与进度的取舍并管理干系人预期？',
+   '默认': '请介绍你在过去最具有挑战性的一个项目：遇到的核心瓶颈是什么，你是如何权衡并解决的？'
+ };
+
+ const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({
+   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+ }[c]));
+
+ async function api(path, method = 'GET', data, signal) {
+   const r = await fetch(path, {
+     method,
+      signal,
+     headers: { 'content-type': 'application/json' },
+     body: data ? JSON.stringify(data) : undefined
+   });
+   const x = await r.json();
+   if (!r.ok) throw Error(x.error || '操作失败');
+   return x;
+ }
+
+const toast = createToast(escapeHtml);
+
+ /* ==========================================================================
+   Tab Navigation Architecture (Emil's Blur Crossfade Masking)
+    ========================================================================== */
+
+ function switchTab(tabId) {
+   if (!tabTitles[tabId]) tabId = 'dashboard';
+
+  $$('.tab-pane').forEach(pane => {
+    pane.classList.toggle('active', pane.id === `pane-${tabId}`);
+    pane.classList.remove('transitioning');
+  });
+
+   // Update nav links
+   $$('.nav-link').forEach(btn => {
+     const matches = btn.dataset.tab === tabId;
+     btn.classList.toggle('active', matches);
+     if (matches) btn.setAttribute('aria-current', 'page');
+     else btn.removeAttribute('aria-current');
+   });
+
+   // Update breadcrumbs
+   const currentCrumb = $('#crumb-current');
+   if (currentCrumb) {
+     currentCrumb.textContent = tabTitles[tabId];
+   }
+
+   // Sync location hash
+   if (window.location.hash.slice(1) !== tabId) {
+     window.location.hash = tabId;
+   }
+
+   window.scrollTo({ top: 0, behavior: 'instant' });
+ }
+
+ window.addEventListener('hashchange', () => {
+   const hash = window.location.hash.slice(1);
+   if (hash && tabTitles[hash]) {
+     switchTab(hash);
+   }
+ });
+
+ document.addEventListener('click', e => {
+   const tabTarget = e.target.closest('[data-tab]');
+   if (tabTarget) {
+     e.preventDefault();
+     switchTab(tabTarget.dataset.tab);
+   }
+ });
+
+ /* ==========================================================================
+    macOS Sheet Modal Management
+    ========================================================================== */
+
+ let modalOpener = null;
+ let modalOpenFrame = null;
+ function openModal() {
+   const modal = $('#modal-backdrop');
+   if (!modal) return;
+  clearTimeout(window.modalCloseTimer);
+  if (modal.hidden) modalOpener = document.activeElement;
+   modal.hidden = false;
+  cancelAnimationFrame(modalOpenFrame);
+  modalOpenFrame = requestAnimationFrame(() => {
+    if (modal.hidden) return;
+    modal.classList.add('open');
+    const titleInput = $('#source-title');
+    if (titleInput) titleInput.focus();
+  });
+ }
+
+ function closeModal() {
+   const modal = $('#modal-backdrop');
+   if (!modal) return;
+  cancelAnimationFrame(modalOpenFrame);
+  modal.classList.remove('open');
+  clearTimeout(window.modalCloseTimer);
+  window.modalCloseTimer = setTimeout(() => {
+    modal.hidden = true;
+    const form = $('#source-form');
+    if (form) form.reset();
+    if (modalOpener && modalOpener.isConnected) modalOpener.focus();
+  }, 220);
+ }
+
+ const globalAddBtn = $('#global-add-btn');
+ if (globalAddBtn) globalAddBtn.addEventListener('click', openModal);
+
+ const toggleAddBtn = $('#toggle-add');
+ if (toggleAddBtn) toggleAddBtn.addEventListener('click', openModal);
+
+ const modalCloseBtn = $('#modal-close-btn');
+ if (modalCloseBtn) modalCloseBtn.addEventListener('click', closeModal);
+
+ const cancelAddBtn = $('#cancel-add-btn');
+ if (cancelAddBtn) cancelAddBtn.addEventListener('click', closeModal);
+
+ const modalBackdrop = $('#modal-backdrop');
+ if (modalBackdrop) {
+   modalBackdrop.addEventListener('click', e => {
+     if (e.target === modalBackdrop) closeModal();
+   });
+ }
+
+ window.addEventListener('keydown', e => {
+   if (e.key === 'Escape' && modalBackdrop && !modalBackdrop.hidden) {
+     closeModal();
+   }
+ });
+
+ /* ==========================================================================
+    State Rendering
+    ========================================================================== */
+
+ function getSuggestedQuestion(role) {
+   return sampleQuestions[role] || sampleQuestions['默认'];
+ }
+
+ function render() {
+   // Form inputs & Topbar badges
+   const roleInput = $('#role');
+   if (roleInput) roleInput.value = state.role || '';
+   if (jdLoadedRole !== state.role) {
+     $('#jd-text').value = state.jd || '';
+     $('#jd-requirements').value = state.confirmed_requirements || '';
+     jdSaved = {jd:state.jd || '', requirements:state.confirmed_requirements || ''};
+     $('#jd-status').textContent = state.role ? '' : '请先设置目标岗位';
+     jdLoadedRole = state.role;
+   }
+   if (draftLoadedRole !== state.role) {
+     $('#question').value = state.draft?.question || '';
+     $('#answer').value = state.draft?.answer || '';
+     $('#answer-char-count').textContent = `${$('#answer').value.length} 字`;
+     $('#draft-status').textContent = state.role ? '已恢复本岗位草稿' : '设置岗位后可保存草稿';
+     draftLoadedRole = state.role;
+      try { questionContext = JSON.parse(sessionStorage.getItem('practice-context:' + state.role) || 'null'); } catch { questionContext = null; }
+      if (questionContext?.text !== $('#question').value) questionContext = null;
+      if (state.draft?.parent_attempt_id) questionContext={text:$('#question').value,parentId:state.draft.parent_attempt_id};
+      else if (questionContext?.parentId) questionContext=null;
+      if (state.draft?.question_ref) {
+        const ref=state.draft.question_ref;
+        if (!questionContext && ref.kind==='source') {
+          const source=state.sources.find(s=>(s.questions || []).some(q=>q.id===ref.id));
+          const q=source?.questions.find(item=>item.id===ref.id);
+          if(source) questionContext={topics:q?.topic ? [q.topic] : [],sources:[{title:source.title,url:source.url,date:source.date,type:source.type}]};
+        }
+        if (!questionContext && ref.kind==='debrief') questionContext={sources:[{title:'个人面试记录',type:'个人面试记录'}]};
+        questionContext={...questionContext,text:$('#question').value,questionRef:ref};
+      }
+      else if (questionContext?.questionRef) { delete questionContext.questionRef; }
+      renderQuestionContext();
+   }
+
+   const topbarRole = $('#topbar-role');
+   if (topbarRole) topbarRole.textContent = state.role || '未设定';
+  const searchRole = $('#search-role-text');
+  if (searchRole) searchRole.textContent = state.role || '未设定';
+
+   // Dashboard metric widgets
+   const widgetRole = $('#widget-role-display');
+   if (widgetRole) widgetRole.textContent = state.role || '未设定';
+
+   const widgetCount = $('#widget-count-display');
+   if (widgetCount) widgetCount.textContent = state.sources.length;
+
+   const widgetAttempts = $('#widget-attempts-display');
+   if (widgetAttempts) widgetAttempts.textContent = state.attempts.length;
+
+   // Library counts
+   const count = state.sources.length;
+   if ($('#count')) $('#count').textContent = count;
+   if ($('#nav-count')) $('#nav-count').textContent = count;
+
+   // Render Library sources
+   renderSources();
+
+   // Render Practice history
+   renderAttempts();
+   renderDebriefs();
+
+   // Render Settings badges
+   renderSettings();
+ }
+
+ function renderSources() {
+   const sourcesEl = $('#sources');
+   if (!sourcesEl) return;
+   const allRoles = $('#library-role-scope')?.value === 'all';
+   const inScope = item => allRoles || (!!state.role && item.role === state.role);
+   const scopedSources = state.sources.filter(inScope);
+   if ($('#count')) $('#count').textContent = scopedSources.length;
+   const personalEl = $('#personal-interview-questions');
+   if (personalEl) {
+     const personalQuestions = (state.debriefs || []).filter(item => item.include_in_library && inScope(item));
+     if ($('#personal-count')) $('#personal-count').textContent = personalQuestions.length;
+     personalEl.innerHTML = personalQuestions.length ? personalQuestions.map(item => `
+       <article class="source-item-card">
+         <div class="source-card-main">
+           <div class="source-tags-row">
+             <span class="apple-pill blue">个人面试记录</span>
+             <span class="apple-pill gray">${escapeHtml(item.role || '岗位未知')}</span>
+             <span class="apple-pill gray">${item.company ? escapeHtml(item.company) : '公司未填'}</span>
+             <span class="apple-pill gray">${item.interview_date ? `面试 ${escapeHtml(item.interview_date)}` : '面试时间未知'}</span>
+           </div>
+           <p class="debrief-question">${escapeHtml(item.question)}</p>
+            ${topicEditor('debrief',item.id,'',item.topic)}
+         </div>
+          <div class="source-card-actions"><button type="button" class="action-pill-btn primary" data-library-debrief-practice="${escapeHtml(item.id)}">练习这题</button></div>
+       </article>`).join('') : `<div class="library-empty library-empty-personal"><span class="library-empty-icon library-empty-icon-personal" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span><div class="library-empty-copy"><strong>暂无个人面试题</strong><p>${!allRoles && !state.role ? '请先设置目标岗位，或选择查看全部岗位。' : '在面试复盘中记录问题，并选择将其加入个人题库。'}</p></div><button type="button" class="apple-btn apple-btn-secondary compact" data-tab="${!allRoles && !state.role ? 'role' : 'debrief'}">${!allRoles && !state.role ? '设置岗位' : '进入面试复盘'} <span aria-hidden="true">→</span></button></div>`;
+   }
+   const filtered = activeFilter === 'all'
+     ? scopedSources
+     : scopedSources.filter(s => s.type === activeFilter);
+
+   if (!filtered.length) {
+     sourcesEl.innerHTML = `
+       <div class="library-empty library-empty-sources">
+         <span class="library-empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
+         <div class="library-empty-copy"><strong>${activeFilter === 'all' ? '所选范围暂无面经来源' : '这个分类下暂无面经来源'}</strong><p>${!allRoles && !state.role ? '请先设置目标岗位，或选择查看全部岗位。' : activeFilter === 'all' ? '搜索公开面经或手动录入链接，保存后可在这里整理题目。' : '可以切换内容类型或岗位范围，查看其他来源。'}</p></div>
+         <div class="library-empty-actions">${!allRoles && !state.role ? '<button type="button" class="apple-btn apple-btn-secondary compact" data-tab="role">设置岗位 <span aria-hidden="true">→</span></button>' : activeFilter === 'all' ? '<button type="button" class="apple-btn apple-btn-secondary compact" data-tab="search">搜索面经 <span aria-hidden="true">→</span></button><button type="button" class="library-subtle-link" data-action="open-add-modal">录入已有链接</button>' : ''}</div>
+       </div>
+     `;
+     return;
+   }
+
+   sourcesEl.innerHTML = filtered.map(s => {
+     const typeClass = s.type === '真实面经（自述）' ? 'green' : (s.type === '博主整理' ? 'orange' : 'gray');
+     const dateLabel = s.date ? `发布 ${escapeHtml(s.date)} · 待核实` : '发布时间未知';
+     const interviewDateLabel = s.interview_date ? `面试 ${escapeHtml(s.interview_date)} · 用户填报` : '面试时间未知';
+     const questions = Array.isArray(s.questions) ? s.questions : [];
+     const legacy = s.legacy_question ?? s.question ?? '';
+     return `
+       <article class="source-item-card">
+         <div class="source-card-main">
+           <div class="source-tags-row">
+             <span class="apple-pill ${typeClass}">${escapeHtml(s.type)}</span>
+             <span class="apple-pill gray">${dateLabel}</span>
+             <span class="apple-pill gray">${interviewDateLabel}</span>
+             <span class="apple-pill blue">${escapeHtml(s.role || '岗位未知')}</span>
+           </div>
+           <h3 class="source-card-title">
+             <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer">
+               <span>${escapeHtml(s.title)}</span>
+               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg>
+             </a>
+           </h3>
+           <details class="source-date-editor"><summary>修改面试发生时间</summary>
+             <form class="source-date-form" data-source-date-form="${escapeHtml(s.id)}"><label for="interview-date-${escapeHtml(s.id)}">面试发生时间（留空表示未知）</label><input id="interview-date-${escapeHtml(s.id)}" name="interview_date" type="date" value="${escapeHtml(s.interview_date || '')}"><button type="submit" class="apple-btn apple-btn-secondary compact">保存时间</button></form>
+           </details>
+           <div class="source-questions">
+             <div class="source-questions-heading">关联题目 <span>${questions.length}</span></div>
+             ${questions.length ? questions.map(q => `
+               <div class="source-question-row">
+                  <div class="source-question-content"><div class="source-question-text">${escapeHtml(q.text)}</div>
+                    ${topicEditor('source',q.id,s.id,q.topic)}
+                   <details class="question-note"><summary>个人笔记${q.note ? ' · 已保存' : ''}</summary>
+                     <form class="note-form" data-note-form="${escapeHtml(q.id)}" data-source-id="${escapeHtml(s.id)}">
+                       <label for="note-${escapeHtml(q.id)}">你的理解、项目例子或待补充内容</label>
+                       <textarea id="note-${escapeHtml(q.id)}" name="note" rows="2" maxlength="10000">${escapeHtml(noteDrafts.has(q.id) ? noteDrafts.get(q.id) : (q.note || ''))}</textarea>
+                       <button type="submit" class="apple-btn apple-btn-secondary compact">保存笔记</button>
+                     </form>
+                   </details></div>
+                 <button type="button" class="action-pill-btn primary" data-practice="${escapeHtml(q.id)}">练习这题</button>
+               </div>`).join('') : '<p class="source-question-empty">暂无确认题目，可以从原文摘录后添加。</p>'}
+             ${legacy ? `<div class="legacy-question"><strong>旧内容 · 待核实</strong><p>${escapeHtml(legacy)}</p><p>旧内容可能是搜索摘要，请核对原文后再作为题目保存。</p><button type="button" class="text-link-action" data-copy-legacy="${escapeHtml(s.id)}">复制到题目输入框</button></div>` : ''}
+             <details class="add-question-panel">
+               <summary>＋ 添加关联题目</summary>
+               <form class="add-question-form" data-question-form="${escapeHtml(s.id)}">
+                 <label for="question-${escapeHtml(s.id)}">从原帖摘录或输入问题</label>
+                 <textarea id="question-${escapeHtml(s.id)}" name="text" rows="2" required maxlength="2000" placeholder="确认问题内容后保存"></textarea>
+                  <label for="new-topic-${escapeHtml(s.id)}">题目主题（选填）</label>
+                  <input id="new-topic-${escapeHtml(s.id)}" name="topic" maxlength="100" placeholder="例如：缓存、项目管理">
+                 <button type="submit" class="apple-btn apple-btn-secondary compact">保存题目</button>
+               </form>
+             </details>
+           </div>
+         </div>
+         <div class="source-card-actions">
+           <button class="action-pill-btn delete" data-delete="${escapeHtml(s.id)}">移除</button>
+         </div>
+       </article>
+     `;
+   }).join('');
+ }
+
+  function topicEditor(kind, id, sourceId, topic) {
+    const key=kind+':'+id;
+    const value=topicDrafts.has(key) ? topicDrafts.get(key) : (topic || '');
+    return `<details class="question-topic-editor"><summary>主题：${escapeHtml(topic || '未标注')}</summary><form class="topic-form" data-topic-form="${escapeHtml(id)}" data-topic-kind="${kind}" data-source-id="${escapeHtml(sourceId)}"><label for="topic-${escapeHtml(kind)}-${escapeHtml(id)}">题目主题（选填）</label><div class="topic-form-controls"><input id="topic-${escapeHtml(kind)}-${escapeHtml(id)}" name="topic" maxlength="100" value="${escapeHtml(value)}" placeholder="例如：缓存、项目管理"><button type="submit" class="apple-btn apple-btn-secondary compact">保存主题</button></div></form></details>`;
+  }
+
+  $('#pane-library').addEventListener('input', e => {
+    const form=e.target.closest('[data-topic-form]');
+    if(form && e.target.name==='topic') topicDrafts.set(form.dataset.topicKind+':'+form.dataset.topicForm,e.target.value);
+  });
+  $('#pane-library').addEventListener('submit', async e => {
+    const form=e.target.closest('[data-topic-form]'); if(!form) return;
+    e.preventDefault();
+    const id=form.dataset.topicForm, kind=form.dataset.topicKind, key=kind+':'+id, value=form.elements.topic.value;
+    const path=kind==='source' ? '/api/sources/'+encodeURIComponent(form.dataset.sourceId)+'/questions/'+encodeURIComponent(id)+'/topic' : '/api/debriefs/'+encodeURIComponent(id)+'/topic';
+    const button=form.querySelector('button[type="submit"]'); button.disabled=true;
+    try {
+      const result=await api(path,'PUT',{topic:value});
+      const item=kind==='source' ? state.sources.find(s=>s.id===form.dataset.sourceId)?.questions?.find(q=>q.id===id) : (state.debriefs || []).find(d=>d.id===id);
+      if(item) item.topic=result.topic;
+      if(topicDrafts.get(key)===value) topicDrafts.delete(key);
+      const summary=form.closest('details')?.querySelector('summary'); if(summary) summary.textContent='主题：'+(result.topic || '未标注');
+      toast.success('主题已保存');
+    } catch(err) { toast.error(err.message); }
+    finally { button.disabled=false; }
+  });
+
+ function renderDebriefs() {
+   const list = $('#debrief-list');
+   if (!list) return;
+   const records = state.debriefs || [];
+   if (!records.length) {
+     list.innerHTML = '<p class="source-question-empty">还没有真实面试复盘记录。</p>';
+     return;
+   }
+   list.innerHTML = records.map(item => `
+     <article class="debrief-card">
+       <div class="debrief-meta"><span class="apple-pill blue">个人面试记录</span><span>${escapeHtml(item.role || '岗位未设置')}</span><span>${item.company ? escapeHtml(item.company) : '公司未填'}</span><span>${item.interview_date ? `面试 ${escapeHtml(item.interview_date)}` : '面试时间未知'}</span></div>
+       <p class="debrief-question">${escapeHtml(item.question)}</p>
+       ${item.answer ? `<p class="debrief-detail"><strong>当时的回答：</strong>${escapeHtml(item.answer)}</p>` : ''}
+       ${item.notes ? `<p class="debrief-detail"><strong>复盘：</strong>${escapeHtml(item.notes)}</p>` : ''}
+       <div class="debrief-actions"><label class="checkbox-label"><input type="checkbox" data-debrief-library="${escapeHtml(item.id)}" ${item.include_in_library ? 'checked' : ''}>将此面试问题加入个人题库，供日后练习</label>${item.include_in_library ? `<button type="button" class="action-pill-btn primary" data-practice-debrief="${escapeHtml(item.id)}">练习这题</button>` : ''}</div>
+     </article>`).join('');
+ }
+
+ function renderAttempts() {
+   const listEl = $('#attempts-list');
+   if (!listEl) return;
+
+   const allRoles = $('#attempt-role-scope')?.value === 'all';
+   const attempts = (state.attempts || []).filter(a => allRoles || (!!state.role && a.role === state.role));
+   if (!attempts.length) {
+     listEl.innerHTML = `
+       <div class="apple-empty-state" style="padding: 32px 20px;">
+         <div class="empty-state-desc">最近 30 条练习中，所选岗位范围暂无记录。可切换为全部岗位查看。</div>
+       </div>
+     `;
+     return;
+   }
+
+   listEl.innerHTML = attempts.map(a => {
+     const timeStr = a.created ? new Date(a.created).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+     return `
+       <article class="attempt-card">
+         <div class="attempt-header">
+           <div style="display:flex; align-items:center; gap:8px;">
+             <span class="apple-pill purple">AI 复习</span>
+             ${a.role ? `<span class="apple-pill blue">${escapeHtml(a.role)}</span>` : ''}
+              ${a.question_link_available === 0 ? '<span class="apple-pill gray">关联题目已不可用</span>' : ''}
+           </div>
+           <span style="font-size:11.5px; color:var(--apple-text-tertiary);">${escapeHtml(timeStr)}</span>
+         </div>
+         <div class="attempt-question">Q: ${escapeHtml(a.question)}</div>
+         <div class="attempt-answer"><strong>你的作答：</strong>${escapeHtml(a.answer)}</div>
+         <div class="attempt-feedback">${escapeHtml(a.feedback)}</div>
+          <label>本次自评 <select class="apple-select" data-attempt-assessment="${escapeHtml(a.id)}" aria-label="本次练习自评">
+            <option value="unassessed" ${!a.rating ? 'selected' : ''}>尚未自评</option>
+            <option value="revisit" ${a.rating === 'revisit' ? 'selected' : ''}>需要再练</option>
+            <option value="comfortable" ${a.rating === 'comfortable' ? 'selected' : ''}>比较熟悉</option>
+          </select></label>
+       </article>
+     `;
+   }).join('');
+ }
+
+  $('#attempts-list').addEventListener('change', async e => {
+    const select=e.target.closest('[data-attempt-assessment]');
+    if (!select) return;
+    select.disabled=true;
+    try { await api('/api/attempts/' + encodeURIComponent(select.dataset.attemptAssessment) + '/assessment', 'PUT', {rating:select.value}); await refresh(); toast.success('自评已保存'); }
+    catch (err) { toast.error(err.message); await refresh().catch(() => {}); }
+    finally { select.disabled=false; }
+  });
+
+  $('#import-btn').addEventListener('click', () => $('#import-file').click());
+  $('#import-file').addEventListener('change', async e => {
+    const file=e.target.files[0]; if(!file) return;
+    const status=$('#import-status');
+    try {
+      if(file.size>8000000) throw Error('备份文件过大（上限 8 MB）');
+      const data=JSON.parse(await file.text());
+      const preview=await api('/api/import','POST',{mode:'preview',data});
+      status.textContent=`备份预览：新增 ${preview.新增} 项，保留现有 ${preview.保留现有} 项。`;
+      if (!window.confirm(`${status.textContent}\n确认合并导入？现有冲突记录不会被覆盖。`)) return;
+      const result=await api('/api/import','POST',{mode:'merge',data});
+      await refresh();
+      status.textContent=`导入完成：新增 ${result.新增} 项，保留现有 ${result.保留现有} 项。`;
+      toast.success('备份已导入');
+    } catch(err) { status.textContent='导入失败：'+(err instanceof SyntaxError ? '文件不是有效的 JSON' : err.message); }
+    finally { e.target.value=''; }
+  });
+
+ function renderSettings() {
+   const searchBadge = $('#settings-search-badge');
+   if (searchBadge) {
+     if (state.searchConfigured) {
+       searchBadge.className = 'apple-pill green';
+       searchBadge.textContent = '已就绪 (Tavily Search API)';
+     } else {
+       searchBadge.className = 'apple-pill gray';
+       searchBadge.textContent = '待配置 ($env:TAVILY_API_KEY)';
+     }
+   }
+
+   const aiBadge = $('#settings-ai-badge');
+   if (aiBadge) {
+     if (state.aiConfigured) {
+       aiBadge.className = 'apple-pill green';
+        aiBadge.textContent = '已配置（尚未验证连接）';
+     } else {
+       aiBadge.className = 'apple-pill gray';
+       aiBadge.textContent = '待配置 ($env:AI_API_KEY)';
+     }
+   }
+ }
+
+ async function refresh() {
+    const nextState = await api('/api/state');
+    if (state.role !== nextState.role) invalidateSearchForRoleChange();
+    state = nextState;
+   render();
+ }
+
+ function invalidateSearchForRoleChange() {
+   if (!searchBatch && !searchController) return;
+   searchRequestId++;
+   searchBatch = null;
+   searchController?.abort();
+   searchController = null;
+   const results = $('#results'), status = $('#search-status'), button = $('#search-btn');
+   if (results) results.replaceChildren();
+   if (status) { status.className = 'status-banner neutral'; status.textContent = '目标岗位已切换，请重新搜索面经。'; }
+   if (button) { button.disabled = false; button.innerHTML = searchButtonMarkup; }
+ }
+
+ function writeDraft() {
+   clearTimeout(draftTimer);
+   const role = state.role;
+   if (!role) return draftWrite;
+    const payload = {role, question: $('#question').value, answer: $('#answer').value, parent_attempt_id:questionContext?.parentId || '', question_ref:questionContext?.questionRef || null};
+   $('#draft-status').textContent = '正在保存草稿…';
+   draftWrite = draftWrite.catch(() => {}).then(() => api('/api/draft', 'PUT', payload)).then(() => {
+     if (state.role === role) $('#draft-status').textContent = '草稿已保存在本机';
+   }).catch(() => {
+     if (state.role === role) $('#draft-status').textContent = '草稿保存失败，请检查服务';
+     throw Error('草稿保存失败');
+   });
+   return draftWrite;
+ }
+
+ function scheduleDraft() {
+   clearTimeout(draftTimer);
+   if (!state.role) { $('#draft-status').textContent = '设置岗位后可保存草稿'; return; }
+   $('#draft-status').textContent = '草稿待保存…';
+   draftTimer = setTimeout(() => { writeDraft().catch(() => {}); }, 400);
+ }
+
+ function setQuestionContext(context) {
+   questionContext=context;
+   if (state.role) {
+     try { if(context) sessionStorage.setItem('practice-context:' + state.role, JSON.stringify(context)); else sessionStorage.removeItem('practice-context:' + state.role); } catch {}
+   }
+   renderQuestionContext();
+ }
+
+ function renderQuestionContext() {
+   const el=$('#question-context'); if(!el) return;
+   el.replaceChildren(); el.hidden=!questionContext;
+   if(!questionContext) return;
+   if(questionContext.parentId) { el.textContent='正在回答追问；点评会包含上一轮问题和回答。'; return; }
+   if(questionContext.reason) { const reason=document.createElement('div'); reason.textContent=`推荐原因：${questionContext.reason}${questionContext.reasonDetails ? ' · '+questionContext.reasonDetails : ''}`; el.append(reason); }
+   if(questionContext.topics?.length) { const topics=document.createElement('div'); topics.textContent='主题：'+questionContext.topics.join('、'); el.append(topics); }
+   const sources=questionContext.sources?.length ? questionContext.sources : [{title:questionContext.sourceTitle || '来源未知',url:questionContext.sourceUrl}];
+   for(const source of sources) {
+     const line=document.createElement('div'); line.append(document.createTextNode('来源：'));
+     try { const url=new URL(source.url); if(!['http:','https:'].includes(url.protocol)) throw Error('invalid'); const link=document.createElement('a'); link.href=url.href; link.target='_blank'; link.rel='noopener noreferrer'; link.textContent=source.title || '查看原帖'; line.append(link); }
+     catch { line.append(document.createTextNode(source.title || '来源未知')); }
+     if(source.type && source.type!=='个人面试记录') line.append(document.createTextNode(' · '+source.type));
+     if(source.date) line.append(document.createTextNode(' · 日期 '+source.date+'（待核实）'));
+     el.append(line);
+   }
+ }
+
+ function loadPracticeQuestion(text) {
+   const question = $('#question');
+   const answer = $('#answer');
+   if (question.value !== text && answer.value.trim() && !window.confirm('切换题目会替换当前回答，确定继续吗？')) return false;
+   if (question.value !== text) { answer.value = ''; $('#answer-char-count').textContent = '0 字'; }
+    question.value = text;
+    setQuestionContext(null);
+   scheduleDraft();
+   return true;
+ }
+
+ function canSwitchRole(role) {
+   if (role === state.role) return true;
+   if (jdBusy) { toast.error('请等待岗位描述处理完成'); return false; }
+   const changed = $('#jd-text').value !== jdSaved.jd || $('#jd-requirements').value !== jdSaved.requirements;
+   return !changed || window.confirm('当前岗位描述有未保存的修改，切换岗位后这些修改将丢失。确定切换吗？');
+ }
+
+ $('#question').addEventListener('input', () => { if(questionContext && $('#question').value !== questionContext.text) setQuestionContext(null); scheduleDraft(); });
+ $('#answer').addEventListener('input', scheduleDraft);
+ $('#clear-draft').addEventListener('click', () => {
+   if (!$('#question').value && !$('#answer').value) return;
+   if (!window.confirm('确定清空当前岗位的题目和回答草稿吗？')) return;
+   $('#question').value = '';
+    setQuestionContext(null);
+   $('#answer').value = '';
+   $('#answer-char-count').textContent = '0 字';
+   writeDraft().catch(() => {});
+ });
+ window.addEventListener('pagehide', () => {
+   if (!state.role) return;
+   clearTimeout(draftTimer);
+    fetch('/api/draft', {method:'PUT', headers:{'content-type':'application/json'}, body:JSON.stringify({role:state.role,question:$('#question').value,answer:$('#answer').value,parent_attempt_id:questionContext?.parentId || '',question_ref:questionContext?.questionRef || null}), keepalive:true}).catch(() => {});
+ });
+
+ $('#jd-form').addEventListener('submit', async e => {
+   e.preventDefault();
+   if (!state.role) { toast.error('请先设置目标岗位'); return; }
+   const button = e.target.querySelector('button[type="submit"]');
+   const role = state.role;
+   const jd = $('#jd-text').value;
+   const confirmed_requirements = $('#jd-requirements').value;
+   button.disabled = true;
+   jdBusy = true;
+   try {
+     await api('/api/jd', 'POST', {role, jd, confirmed_requirements});
+     if (state.role === role) { jdSaved = {jd, requirements:confirmed_requirements}; $('#jd-status').textContent = '已保存当前岗位的描述和要求'; }
+     toast.success('岗位描述已保存');
+   } catch (err) { toast.error(err.message); }
+   finally { button.disabled = false; jdBusy = false; }
+ });
+
+ $('#jd-extract').addEventListener('click', async e => {
+   if (!state.role) { toast.error('请先设置目标岗位'); return; }
+   const jd = $('#jd-text').value.trim();
+   if (!jd) { toast.error('请先填写岗位描述'); return; }
+   const role = state.role;
+   const requirementsBefore = $('#jd-requirements').value;
+   const button = e.currentTarget;
+   button.disabled = true;
+   jdBusy = true;
+   $('#jd-status').textContent = '正在提取，结果需确认后保存…';
+   try {
+     const result = await api('/api/jd/parse', 'POST', {jd});
+     if (state.role !== role || $('#jd-text').value.trim() !== jd || $('#jd-requirements').value !== requirementsBefore) {
+       $('#jd-status').textContent = '内容已变化，请重新提取，或直接手动填写';
+       return;
+     }
+     $('#jd-requirements').value = result.requirements || '';
+     $('#jd-status').textContent = '请检查并修改提取结果，然后点击保存';
+   } catch (err) { $('#jd-status').textContent = err.message.includes('手动填写') ? err.message : err.message + '；也可以手动填写要求。'; }
+   finally { button.disabled = false; jdBusy = false; }
+ });
+
+ /* ==========================================================================
+    Action Handlers
+    ========================================================================== */
+
+ // Offer the next step only after the role has been saved and refreshed.
+ const roleNextDialog = $('#role-next-dialog');
+ let roleSaveBusy = false;
+ let roleNextOpener = null;
+ function showRoleNext() {
+   if (!$('#pane-role').classList.contains('active') || roleNextDialog.open) return;
+   roleNextOpener = document.activeElement;
+   roleNextDialog.showModal();
+   $('#role-next-close').focus();
+ }
+ roleNextDialog.addEventListener('close', () => {
+   if (roleNextOpener?.isConnected) roleNextOpener.focus();
+ });
+ $('#role-next-close').addEventListener('click', () => roleNextDialog.close());
+ $('#role-next-later').addEventListener('click', () => roleNextDialog.close());
+ roleNextDialog.addEventListener('click', e => {
+   const choice = e.target.closest('[data-next]');
+   if (!choice) return;
+   const next = choice.dataset.next;
+   roleNextOpener = null;
+   roleNextDialog.close();
+   if (next === 'jd') {
+     $('#jd-text').focus();
+     $('#jd-text').scrollIntoView({behavior:'smooth', block:'center'});
+   } else {
+     switchTab(next);
+   }
+ });
+ async function saveRole(role) {
+   if (roleSaveBusy || !canSwitchRole(role)) return;
+   roleSaveBusy = true;
+   const controls = $$('#role-form button, .preset-chip');
+   controls.forEach(button => { button.disabled = true; });
+   try {
+     if (role !== state.role) await writeDraft();
+     await api('/api/role', 'POST', { role });
+     await refresh();
+     toast.success(`目标岗位已设定为「${role}」`);
+     showRoleNext();
+   } catch (err) {
+     toast.error(err.message);
+   } finally {
+     roleSaveBusy = false;
+     controls.forEach(button => { button.disabled = false; });
+   }
+ }
+ $('#role-form').addEventListener('submit', e => {
+   e.preventDefault();
+   saveRole($('#role').value.trim());
+ });
+ $$('.preset-chip').forEach(btn => {
+   btn.addEventListener('click', () => saveRole(btn.dataset.role));
+ });
+
+ // Dashboard Quick Actions
+ document.addEventListener('click', e => {
+   const actionBtn = e.target.closest('[data-action]');
+   if (!actionBtn) return;
+   const action = actionBtn.dataset.action;
+   if (action === 'goto-search') switchTab('search');
+   if (action === 'open-add-modal') openModal();
+   if (action === 'goto-library') switchTab('library');
+ });
+
+ // Segmented Control for Time Range
+ const segmentContainer = $('#range-segmented');
+ if (segmentContainer) {
+   segmentContainer.addEventListener('click', e => {
+     const btn = e.target.closest('.segment-btn');
+     if (!btn) return;
+     segmentContainer.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active'));
+     btn.classList.add('active');
+     const val = btn.dataset.val;
+     const select = $('#range');
+     if (select) select.value = val;
+     updateSearchConditionsNotice();
+   });
+ }
+
+ // Add Source form submission (macOS Sheet)
+ const sourceForm = $('#source-form');
+ if (sourceForm) {
+   sourceForm.addEventListener('submit', async e => {
+     e.preventDefault();
+     try {
+       await api('/api/sources', 'POST', {
+         title: $('#source-title').value,
+         url: $('#source-url').value,
+         date: $('#source-date').value,
+         interview_date: $('#source-interview-date').value,
+         type: $('#source-type').value,
+         question: $('#source-question').value,
+         role: state.role
+       });
+       closeModal();
+       await refresh();
+      toast.success('面经来源已保存');
+     } catch (err) {
+      toast.error(err.message);
+     }
+   });
+ }
+
+ // Sources list item click actions (Practice or Delete)
+ const sourcesContainer = $('#sources');
+ if (sourcesContainer) {
+   sourcesContainer.addEventListener('input', e => {
+     const form = e.target.closest('[data-note-form]');
+     if (form && e.target.name === 'note') noteDrafts.set(form.dataset.noteForm, e.target.value);
+   });
+   sourcesContainer.addEventListener('submit', async e => {
+     const dateForm = e.target.closest('[data-source-date-form]');
+     if (dateForm) {
+       e.preventDefault();
+       const button = dateForm.querySelector('button[type="submit"]');
+       button.disabled = true;
+       try {
+         const interview_date = dateForm.elements.interview_date.value;
+         await api('/api/sources/' + encodeURIComponent(dateForm.dataset.sourceDateForm) + '/interview-date', 'PUT', {interview_date});
+         const source = state.sources.find(s => s.id === dateForm.dataset.sourceDateForm);
+         if (source) source.interview_date = interview_date;
+         renderSources();
+         toast.success('面试发生时间已保存');
+       } catch (err) { toast.error(err.message); button.disabled = false; }
+       return;
+     }
+     const noteForm = e.target.closest('[data-note-form]');
+     if (noteForm) {
+       e.preventDefault();
+       const button = noteForm.querySelector('button[type="submit"]');
+       const note = noteForm.elements.note.value;
+       button.disabled = true;
+       try {
+         await api('/api/sources/' + encodeURIComponent(noteForm.dataset.sourceId) + '/questions/' + encodeURIComponent(noteForm.dataset.noteForm) + '/note', 'PUT', {note});
+         const question = state.sources.flatMap(s => s.questions || []).find(q => q.id === noteForm.dataset.noteForm);
+         if (question) question.note = note;
+         if (noteDrafts.get(noteForm.dataset.noteForm) === note) noteDrafts.delete(noteForm.dataset.noteForm);
+         toast.success('笔记已保存');
+       } catch (err) { toast.error(err.message); }
+       finally { button.disabled = false; }
+       return;
+     }
+     const form = e.target.closest('[data-question-form]');
+     if (!form) return;
+     e.preventDefault();
+     const text = form.elements.text.value.trim();
+     if (!text) return;
+     const button = form.querySelector('button[type="submit"]');
+     button.disabled = true;
+     try {
+       await api('/api/sources/' + encodeURIComponent(form.dataset.questionForm) + '/questions', 'POST', {text,topic:form.elements.topic.value});
+       await refresh();
+       toast.success('题目已保存，可从该来源开始练习');
+     } catch (err) {
+       toast.error(err.message);
+       button.disabled = false;
+     }
+   });
+   sourcesContainer.addEventListener('click', async e => {
+    const copyLegacyBtn = e.target.closest('[data-copy-legacy]');
+    if (copyLegacyBtn) {
+      const source = state.sources.find(s => s.id === copyLegacyBtn.dataset.copyLegacy);
+      const card = copyLegacyBtn.closest('.source-item-card');
+      const details = card.querySelector('.add-question-panel');
+      details.open = true;
+      const input = details.querySelector('textarea');
+      input.value = source?.legacy_question ?? source?.question ?? '';
+      input.focus();
+      return;
+    }
+    const deleteBtn = e.target.closest('[data-delete]');
+    if (deleteBtn) {
+      const id = deleteBtn.dataset.delete;
+      if (!deleteBtn.classList.contains('confirming')) {
+        deleteBtn.classList.add('confirming');
+        deleteBtn.textContent = '确认移除来源及题目？';
+        setTimeout(() => {
+          if (deleteBtn && deleteBtn.classList.contains('confirming')) {
+            deleteBtn.classList.remove('confirming');
+            deleteBtn.textContent = '移除';
+          }
+        }, 3000);
+        return;
+      }
+
+       try {
+         await api('/api/sources/' + id, 'DELETE');
+         await refresh();
+        toast.success('已自题库中移除');
+       } catch (err) {
+        toast.error(err.message);
+       }
+       return;
+     }
+
+     const practiceId = e.target.closest('[data-practice]')?.dataset.practice;
+     if (practiceId) {
+       const source = state.sources.find(s => (s.questions || []).some(q => q.id === practiceId));
+       const target = source?.questions.find(q => q.id === practiceId);
+       if (target && target.text) {
+         if ((!state.role || source.role !== state.role) && !window.confirm(`此题来自「${source.role || '岗位未知'}」，将按当前岗位「${state.role || '未设置'}」进行练习。是否继续？`)) return;
+         if (!loadPracticeQuestion(target.text)) return;
+          const matches=state.sources.filter(s=>s.role===source.role && (s.questions || []).some(q=>q.text.trim()===target.text.trim()));
+          setQuestionContext({text:target.text,questionRef:source.role===state.role ? {kind:'source',id:target.id} : null,topics:target.topic ? [target.topic] : [],sources:matches.map(s=>({title:s.title,url:s.url,date:s.date,type:s.type}))});
+         switchTab('practice');
+         const aInput = $('#answer');
+         if (aInput) aInput.focus();
+         toast('考题已载入复习面板');
+       }
+     }
+   });
+ }
+
+ $('#attempt-role-scope').addEventListener('change', renderAttempts);
+
+ // Library Category Filter Pills
+ $$('.filter-pill').forEach(pill => {
+   pill.addEventListener('click', () => {
+     $$('.filter-pill').forEach(p => { p.classList.remove('active'); p.setAttribute('aria-pressed', 'false'); });
+     pill.classList.add('active');
+     pill.setAttribute('aria-pressed', 'true');
+     activeFilter = pill.dataset.filter;
+     renderSources();
+   });
+ });
+
+ $('#library-role-scope').addEventListener('change', renderSources);
+ $('#personal-interview-questions').addEventListener('click', e => {
+   const button = e.target.closest('[data-library-debrief-practice]');
+   if (!button) return;
+   const item = (state.debriefs || []).find(d => d.id === button.dataset.libraryDebriefPractice && d.include_in_library);
+   if (!item) return;
+   if ((!state.role || item.role !== state.role) && !window.confirm(`此题来自「${item.role || '岗位未知'}」，将按当前岗位「${state.role || '未设置'}」进行练习。是否继续？`)) return;
+   if (!loadPracticeQuestion(item.question)) return;
+    setQuestionContext({text:item.question,questionRef:item.role===state.role ? {kind:'debrief',id:item.id} : null,topics:item.topic ? [item.topic] : [],sources:[{title:'个人面试记录',type:'个人面试记录'}]});
+   switchTab('practice');
+   $('#answer').focus();
+   toast('已载入个人面试记录中的问题');
+ });
+
+ const debriefForm = $('#debrief-form');
+ debriefForm.addEventListener('submit', async e => {
+   e.preventDefault();
+   const button = debriefForm.querySelector('button[type="submit"]');
+   const payload = {
+     company: $('#debrief-company').value,
+     role: state.role,
+     interview_date: $('#debrief-date').value,
+     question: $('#debrief-question').value,
+     answer: $('#debrief-answer').value,
+     notes: $('#debrief-notes').value,
+     include_in_library: $('#debrief-library').checked
+   };
+   button.disabled = true;
+   try {
+     await api('/api/debriefs', 'POST', payload);
+     debriefForm.reset();
+     await refresh();
+     toast.success('面试复盘已保存');
+   } catch (err) { toast.error(err.message); }
+   finally { button.disabled = false; }
+ });
+
+ $('#debrief-list').addEventListener('change', async e => {
+   const input = e.target.closest('[data-debrief-library]');
+   if (!input) return;
+   const checked = input.checked;
+   input.disabled = true;
+   try {
+     await api('/api/debriefs/' + encodeURIComponent(input.dataset.debriefLibrary) + '/library', 'PUT', {include_in_library:checked});
+     const item = (state.debriefs || []).find(d => d.id === input.dataset.debriefLibrary);
+     if (item) item.include_in_library = checked;
+     renderDebriefs();
+     renderSources();
+     toast.success(checked ? '已加入个人题库' : '已从个人题库移除');
+   } catch (err) { input.checked = !checked; input.disabled = false; toast.error(err.message); }
+ });
+ $('#debrief-list').addEventListener('click', e => {
+   const button = e.target.closest('[data-practice-debrief]');
+   if (!button) return;
+   const item = (state.debriefs || []).find(d => d.id === button.dataset.practiceDebrief && d.include_in_library);
+   if (!item) return;
+   if ((!state.role || item.role !== state.role) && !window.confirm(`此题来自「${item.role || '岗位未知'}」，将按当前岗位「${state.role || '未设置'}」进行练习。是否继续？`)) return;
+   if (!loadPracticeQuestion(item.question)) return;
+    setQuestionContext({text:item.question,questionRef:item.role===state.role ? {kind:'debrief',id:item.id} : null,topics:item.topic ? [item.topic] : [],sources:[{title:'个人面试记录',type:'个人面试记录'}]});
+   switchTab('practice');
+   $('#answer').focus();
+   toast('已载入个人面试记录中的问题');
+ });
+
+ // Sample Question Button in Practice Tab
+ const sampleQBtn = $('#sample-q-btn');
+ if (sampleQBtn) {
+   sampleQBtn.addEventListener('click', () => {
+     const q = getSuggestedQuestion(state.role);
+     if (!loadPracticeQuestion(q)) return;
+     const aInput = $('#answer');
+     if (aInput) aInput.focus();
+     toast('已填入岗位示例题');
+   });
+ }
+
+ // Pick random question from library
+ const pickFromLibBtn = $('#pick-from-lib-btn');
+ if (pickFromLibBtn) {
+    pickFromLibBtn.addEventListener('click', async () => {
+     if (!state.role) {
+       toast('请先在岗位设置中保存目标岗位，再从题库选题');
+       return;
+     }
+      const role=state.role;
+      let recommended;
+      try { ({question:recommended} = await api('/api/recommendation','POST',{role})); }
+      catch(err) { toast.error(err.message); return; }
+      if (state.role !== role) { toast('岗位已切换，请重新选择题目'); return; }
+      if (!recommended) {
+       toast('当前岗位暂无题目，可先添加面经题目或选择将面试问题加入题库');
+       return;
+     }
+      if (!loadPracticeQuestion(recommended.text)) return;
+      setQuestionContext({text:recommended.text,questionRef:recommended.question_ref || null,reason:recommended.reason,reasonDetails:recommended.reasonDetails,topics:recommended.topics,sources:recommended.sources,sourceTitle:recommended.sourceTitle,sourceUrl:recommended.sourceUrl});
+     const aInput = $('#answer');
+     if (aInput) aInput.focus();
+      toast(`推荐原因：${recommended.reason} · 来源：${recommended.sourceTitle}`);
+   });
+ }
+
+ // Answer character counter
+ const answerInput = $('#answer');
+ const charCountEl = $('#answer-char-count');
+ if (answerInput && charCountEl) {
+   answerInput.addEventListener('input', () => {
+     charCountEl.textContent = `${answerInput.value.length} 字`;
+   });
+ }
+
+
+ // Search form submission
+ function updateSearchConditionsNotice() {
+   if (!searchBatch?.statusText) return;
+   const current = {company:$('#company')?.value.trim() || '', range:$('#range')?.value || 'year', source:$('#search-source')?.value || 'all'};
+   const previous = searchBatch.conditions;
+   const changed = current.company !== previous.company || current.range !== previous.range || current.source !== previous.source;
+   const status = $('#search-status');
+   if (status) status.textContent = searchBatch.statusText + (changed ? ' 搜索条件已更改，请重新搜索以更新结果。' : '');
+ }
+
+ function searchSnippet(snippet) {
+   const full = String(snippet || '').trim();
+  const clean = full
+    .replace(/<[^>]+>/g, '')
+    .replace(/#{1,6}\s*/g, ' ')
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')
+    .replace(/(\*|_)(.*?)\1/g, '$2')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/`{1,3}[^`]*`{1,3}/g, '')
+    .replace(/\[\.\.\.\]/g, ' ')
+    .replace(/\\n/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+   const chars = Array.from(clean);
+   if (!chars.length) return '<p class="result-snippet">暂无摘要，请查看原帖。</p>';
+   const preview = chars.slice(0, 200).join('');
+   return `<p class="result-snippet">${escapeHtml(preview)}${chars.length > 200 ? '…' : ''}</p>` +
+    (chars.length > 200 ? `
+      <details class="result-details">
+        <summary><span>查看完整摘要</span><svg class="result-details-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg></summary>
+        <div class="result-details-content"><div class="result-details-inner"><p>${escapeHtml(full)}</p></div></div>
+      </details>` : '');
+ }
+
+ const searchForm = $('#search-form');
+ if (searchForm) {
+    searchButtonMarkup = $('#search-btn')?.innerHTML || '';
+   searchForm.addEventListener('input', updateSearchConditionsNotice);
+   searchForm.addEventListener('change', updateSearchConditionsNotice);
+   searchForm.addEventListener('submit', async e => {
+     e.preventDefault();
+     const button = $('#search-btn');
+      if (button?.disabled) return;
+      const role = state.role;
+      const sourceSelect = $('#search-source');
+      const source = sourceSelect?.value || 'all';
+      const sourceLabel = sourceSelect?.selectedOptions[0]?.textContent || '全部推荐来源';
+      const company = $('#company')?.value.trim() || '';
+      const range = $('#range')?.value || 'year';
+      const rangeLabel = ({year:'近一年','6m':'近半年','3m':'近三个月',all:'不限时间'})[range] || range;
+      if (!role) { toast.error('请先设置并保存目标岗位'); return; }
+      const requestId = ++searchRequestId;
+      searchController?.abort();
+      const controller = new AbortController();
+      searchController = controller;
+      searchBatch = null;
+     if (button) button.disabled = true;
+     if (button) button.innerHTML = `
+       <svg class="spin-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+       <span>正在检索...</span>
+     `;
+
+     const statusBanner = $('#search-status');
+     if (statusBanner) {
+       statusBanner.className = 'status-banner info';
+       statusBanner.innerHTML = `<span>正在搜索公开面经，请稍候；结果需要核实来源。</span>`;
+     }
+     const resultsEl = $('#results');
+     if (resultsEl) {
+       resultsEl.innerHTML = `
+         <div class="result-item result-skeleton" aria-hidden="true">
+           <div class="skeleton-shimmer skeleton-pills"></div>
+           <div class="skeleton-shimmer skeleton-title"></div>
+           <div class="skeleton-shimmer skeleton-line"></div>
+           <div class="skeleton-shimmer skeleton-line short"></div>
+         </div>
+         <div class="result-item result-skeleton" aria-hidden="true">
+           <div class="skeleton-shimmer skeleton-pills"></div>
+           <div class="skeleton-shimmer skeleton-title"></div>
+           <div class="skeleton-shimmer skeleton-line"></div>
+           <div class="skeleton-shimmer skeleton-line short"></div>
+         </div>
+       `;
+     }
+
+     try {
+       const data = await api('/api/search', 'POST', {
+         role,
+         company,
+         range,
+         source
+        }, controller.signal);
+        if (requestId !== searchRequestId || state.role !== role) return;
+       const statusText = `「${role}」找到 ${data.results?.length || 0} 条结果 · ${company || '不限公司'} · ${rangeLabel} · ${sourceLabel}。${data.notice || ''}`;
+       searchBatch = {role, results:data.results || [], conditions:{company,range,source}, statusText};
+       updateSearchConditionsNotice();
+       if (data.results && data.results.length) {
+         if (resultsEl) {
+           resultsEl.innerHTML = data.results.map((r, i) => {
+             const saved = (state.sources || []).some(s => s.role === role && s.url === r.url);
+             const platformClass = r.platform === '牛客' ? 'platform-nowcoder' : r.platform === '掘金' ? 'platform-juejin' : r.platform === '知乎' ? 'platform-zhihu' : 'gray';
+             return `
+             <article class="result-item">
+               <div class="result-meta">
+                 <span class="apple-pill ${platformClass}">${escapeHtml(r.platform || '外部面经')}</span>
+                 ${r.role_match === 'unknown' ? '<span class="apple-pill match-unknown">岗位待核实</span>' : (r.role_match === 'title_match' ? '<span class="apple-pill match-ok">岗位匹配</span>' : '')}
+                 <span class="apple-pill date-pill">${r.date ? `发布于 ${escapeHtml(r.date)}` : '发布时间以原帖为准'}</span>
+               </div>
+               <h4 class="result-title">
+                 <a href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">
+                   <span>${escapeHtml(r.title)}</span>
+                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg>
+                 </a>
+               </h4>
+               ${searchSnippet(r.snippet)}
+               <div class="result-footer">
+                 <button type="button" class="result-action-btn ${saved ? 'saved' : ''}" data-save="${i}" ${saved ? 'disabled' : ''}>${saved ? '已收藏' : '+ 收藏来源'}</button>
+                 <a href="${escapeHtml(r.url)}" class="result-open-link" target="_blank" rel="noopener noreferrer">
+                   <span>打开原帖</span>
+                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                 </a>
+               </div>
+             </article>
+           `; }).join('');
+         }
+       } else {
+         if (resultsEl) {
+           resultsEl.innerHTML = `
+             <div class="apple-empty-state" style="padding: 28px;">
+               <div class="empty-state-desc">未找到符合条件的面经，建议尝试放宽时间范围或精简公司关键词。</div>
+             </div>
+           `;
+         }
+       }
+     } catch (err) {
+        if (requestId === searchRequestId && err.name !== 'AbortError' && statusBanner) {
+         statusBanner.className = 'status-banner neutral';
+         statusBanner.innerHTML = `<span>${escapeHtml(err.message)}</span>`;
+         if (resultsEl) resultsEl.replaceChildren();
+       }
+     } finally {
+        if (requestId === searchRequestId) {
+          searchController = null;
+        }
+        if (requestId === searchRequestId && button) {
+         button.disabled = false;
+          button.innerHTML = searchButtonMarkup;
+       }
+     }
+   });
+ }
+
+ // Save search result to library
+ const resultsContainer = $('#results');
+ if (resultsContainer) {
+   resultsContainer.addEventListener('click', async e => {
+      const summary = e.target?.closest?.('summary');
+      if (summary && summary.tagName === 'SUMMARY') {
+        const details = summary.closest('details');
+        if (details && details.classList.contains('result-details')) {
+          const toggleText = summary.querySelector('span');
+          if (details.open) {
+            e.preventDefault();
+            if (details.dataset.animating === 'true') return;
+            details.dataset.animating = 'true';
+            details.classList.add('is-collapsing');
+            if (toggleText) toggleText.textContent = '查看完整摘要';
+            setTimeout(() => {
+              details.removeAttribute('open');
+              details.classList.remove('is-collapsing');
+              delete details.dataset.animating;
+            }, 200);
+            return;
+          } else if (toggleText) {
+            toggleText.textContent = '收起完整摘要';
+          }
+        }
+      }
+      const saveButton = e.target.closest('[data-save]');
+      if (!saveButton || saveButton.disabled) return;
+      const batch = searchBatch;
+      const item = batch?.results[Number(saveButton.dataset.save)];
+     if (!item) return;
+      if (state.role !== batch.role) { invalidateSearchForRoleChange(); return; }
+      saveButton.disabled = true;
+      let saved = false;
+     try {
+       await api('/api/sources', 'POST', {
+         ...item,
+         date: item.date || '',
+         type: '来源未知',
+         question: '',
+          role: batch.role
+       });
+       saved = true;
+       saveButton.textContent = '已收藏';
+       try { await refresh(); } catch { toast.error('来源已收藏，但页面数据刷新失败，请刷新页面查看'); return; }
+       toast.success(`来源已收藏到「${batch.role}」，核实原文后可添加题目`);
+     } catch (err) {
+      toast.error(err.message);
+      } finally {
+        if (!saved) saveButton.disabled = false;
+     }
+   });
+ }
+
+ $('#search-target-pill')?.addEventListener('click', () => switchTab('role'));
+
+ // AI Review submission
+ const reviewForm = $('#review-form');
+ if (reviewForm) {
+   reviewForm.addEventListener('submit', async e => {
+     e.preventDefault();
+     const button = $('#review-btn');
+     if (button) button.disabled = true;
+     const originalBtnText = button ? button.innerHTML : '';
+     if (button) button.innerHTML = `<span>正在生成点评…</span>`;
+
+     const reviewStatus = $('#review-status');
+     if (reviewStatus) {
+       reviewStatus.hidden = false;
+       reviewStatus.className = 'status-banner info';
+       reviewStatus.textContent = '正在生成点评与追问，请稍候…';
+     }
+     const emptyResult = $('#practice-result-empty');
+     if (emptyResult) emptyResult.hidden = true;
+     const feedbackEl = $('#feedback');
+     if (feedbackEl) feedbackEl.hidden = true;
+
+     try {
+        const submitted = {role: state.role || $('#role')?.value, question: $('#question')?.value, answer: $('#answer')?.value, parent_attempt_id:questionContext?.parentId || '',question_ref:questionContext?.questionRef || null};
+        const result = await api('/api/review', 'POST', submitted);
+        if (state.role !== submitted.role || $('#question').value !== submitted.question || $('#answer').value !== submitted.answer) {
+          if (reviewStatus) { reviewStatus.className = 'status-banner neutral'; reviewStatus.textContent = '题目或岗位已变化，点评已保存到原练习记录。'; }
+          await refresh();
+          return;
+        }
+
+       if (feedbackEl) {
+         feedbackEl.innerHTML = `
+           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid rgba(0,0,0,0.06); padding-bottom:8px;">
+             <span style="font-weight:700; color:var(--apple-blue); font-size:13px; display:inline-flex; align-items:center; gap:6px;">
+               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>
+              AI 复习点评
+             </span>
+             <button type="button" class="text-link-action" id="copy-feedback-btn">复制点评</button>
+           </div>
+           <div class="feedback-body">${escapeHtml(result.feedback)}</div>
+            ${result.follow_up ? `<div class="followup-question"><strong>追问</strong><p>${escapeHtml(result.follow_up)}</p></div>` : ''}
+            <div class="review-assessment" aria-label="本次练习自评"><strong>这道题感觉怎么样？</strong><div class="review-actions">
+              <button type="button" class="practice-question-action" data-rating="revisit" aria-pressed="false">需要再练</button>
+              <button type="button" class="practice-question-action" data-rating="comfortable" aria-pressed="false">比较熟悉</button>
+              <button type="button" class="practice-question-action" data-rating="unassessed" aria-pressed="true">暂不评价</button>
+            </div><span class="review-assessment-status" role="status">自评会影响题库推荐。</span></div>
+            <div class="review-actions review-next-actions">
+              <button type="button" class="practice-question-action" id="retry-answer">重新作答</button>
+              ${result.follow_up ? '<button type="button" class="practice-question-action" id="answer-followup">回答追问</button>' : ''}
+              <button type="button" class="practice-question-action" id="review-next-question">推荐下一题</button>
+            </div>
+         `;
+         feedbackEl.hidden = false;
+       }
+
+       if (reviewStatus) {
+         reviewStatus.className = 'status-banner neutral';
+         reviewStatus.textContent = '点评已生成，可结合实际情况参考。';
+       }
+
+       const copyBtn = $('#copy-feedback-btn');
+       if (copyBtn) {
+         copyBtn.addEventListener('click', async () => {
+           try {
+             await navigator.clipboard.writeText(result.feedback);
+            toast.success('已复制点评到剪贴板');
+           } catch {
+            toast.error('复制失败，请手动选取文本');
+           }
+          });
+        }
+
+        feedbackEl.querySelectorAll('[data-rating]').forEach(ratingButton => ratingButton.addEventListener('click', async () => {
+          const buttons=feedbackEl.querySelectorAll('[data-rating]'), status=feedbackEl.querySelector('.review-assessment-status');
+          buttons.forEach(item=>item.disabled=true);
+          try {
+            await api('/api/attempts/' + encodeURIComponent(result.id) + '/assessment','PUT',{rating:ratingButton.dataset.rating});
+            buttons.forEach(item=>item.setAttribute('aria-pressed',String(item===ratingButton)));
+            status.textContent=ratingButton.dataset.rating === 'revisit' ? '已保存：这题会优先推荐。' : ratingButton.dataset.rating === 'comfortable' ? '已保存：这题会稍后推荐。' : '已设为尚未自评。';
+            await refresh();
+          } catch(err) { status.textContent='自评保存失败：'+err.message; }
+          finally { buttons.forEach(item=>item.disabled=false); }
+        }));
+        $('#retry-answer').addEventListener('click', () => {
+          if(state.role!==submitted.role || $('#question').value!==submitted.question) { toast('当前题目已变化，请从练习记录查看原作答'); return; }
+          $('#answer').focus();
+        });
+        $('#answer-followup')?.addEventListener('click', () => {
+          if(state.role!==submitted.role || $('#question').value!==submitted.question) { toast('当前题目已变化，请先完成当前练习'); return; }
+          if($('#answer').value!==submitted.answer && $('#answer').value.trim() && !window.confirm('当前回答有新的修改，切换到追问会替换它。确定继续吗？')) return;
+          $('#question').value=result.follow_up; $('#answer').value=''; $('#answer-char-count').textContent='0 字';
+          setQuestionContext({text:result.follow_up,parentId:result.id}); scheduleDraft(); $('#answer').focus();
+        });
+        $('#review-next-question').addEventListener('click', () => $('#pick-from-lib-btn').click());
+
+       await refresh();
+      toast.success('AI 点评已生成');
+     } catch (err) {
+       if (reviewStatus) {
+         reviewStatus.className = 'status-banner error';
+         reviewStatus.textContent = err.message;
+       }
+     } finally {
+       if (button) {
+         button.disabled = false;
+         button.innerHTML = originalBtnText;
+       }
+     }
+   });
+ }
+
+ // Initial Startup
+ const initialHash = window.location.hash.slice(1);
+ if (initialHash && tabTitles[initialHash]) {
+   switchTab(initialHash);
+ } else {
+   switchTab('dashboard');
+ }
+
+refresh().catch(e => toast.error('加载失败：' + e.message));

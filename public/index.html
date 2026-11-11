@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f2f6f8">
+  <title>见面 · 面试准备助手</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="app-window">
+  <!-- macOS Sidebar with Translucent Vibrancy and Native Navigation -->
+  <aside class="sidebar">
+    <div class="window-controls" aria-hidden="true">
+      <span class="control-dot close" title="关闭"></span>
+      <span class="control-dot minimize" title="最小化"></span>
+      <span class="control-dot zoom" title="缩放"></span>
+    </div>
+
+    <a class="brand" href="#dashboard" data-tab="dashboard">
+      <div class="brand-glyph">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-title">见面</span>
+        <span class="brand-badge">STUDIO</span>
+      </div>
+    </a>
+
+    <nav class="sidebar-nav" aria-label="主导航">
+      <button type="button" class="nav-link active" data-tab="dashboard" aria-label="备考工作台">
+        <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+          <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+          <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+          <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+        </svg>
+        <span>备考工作台</span>
+      </button>
+      <button type="button" class="nav-link" data-tab="search" aria-label="发现面经">
+        <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="7"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <span>搜索面经</span>
+      </button>
+      <button type="button" class="nav-link" data-tab="practice" aria-label="AI 复习追问">
+        <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+        </svg>
+        <span>AI 复习追问</span>
+      </button>
+      <button type="button" class="nav-link" data-tab="library" aria-label="资料库">
+        <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+        </svg>
+        <span>资料库</span>
+        <span class="nav-badge" id="nav-count" hidden>0</span>
+      </button>
+      <button type="button" class="nav-link" data-tab="role" aria-label="岗位设置">
+        <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="4"></circle><circle cx="12" cy="12" r="1"></circle></svg>
+        <span>岗位设置</span>
+      </button>
+      <button type="button" class="nav-link" data-tab="debrief" aria-label="真实面试复盘">
+        <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M8 8h8M8 12h8M8 16h5"></path></svg>
+        <span>面试复盘</span>
+      </button>
+    </nav>
+
+    <nav class="sidebar-nav" aria-label="次要导航">
+      <button type="button" class="nav-link" data-tab="settings" aria-label="偏好与状态">
+        <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+        <span>偏好与状态</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="system-status-chip">
+        <div class="pulse-dot"></div>
+        <div class="system-status-text">
+          <div class="status-primary">记录保存在本机</div>
+          <div class="status-secondary" id="db-status-desc">使用 AI 和搜索时会发送必要内容</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Work Area -->
+  <main id="main" class="main-area">
+    <!-- macOS Toolbar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="breadcrumbs">
+          <span class="crumb-root">面试准备</span>
+          <span class="crumb-separator">/</span>
+          <span class="crumb-current" id="crumb-current">备考工作台</span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-tag" id="topbar-role-badge">
+          <span class="tag-dot"></span>
+          <span>目标：</span>
+          <strong id="topbar-role">未设定</strong>
+        </div>
+        <button type="button" class="apple-btn apple-btn-secondary compact" id="global-add-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          <span>录入面经</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Scrollable Window Body -->
+    <div class="scroll-content">
+
+      <!-- TAB 1: DASHBOARD -->
+      <div class="tab-pane active" id="pane-dashboard">
+        <section class="workspace-overview" aria-labelledby="workspace-title">
+          <div class="workspace-intro">
+            <h1 id="workspace-title">面试准备工作台</h1>
+          </div>
+          <div class="workspace-summary">
+            <div class="workspace-summary-top">
+              <span>当前目标岗位</span>
+              <button type="button" class="workspace-role-link" data-tab="role">岗位设置 <span aria-hidden="true">↗</span></button>
+            </div>
+            <div class="workspace-role" id="widget-role-display">未设定</div>
+            <div class="workspace-summary-rule"></div>
+            <div class="workspace-stats">
+              <div class="workspace-stat"><span>已收藏面经</span><strong id="widget-count-display">0</strong><small>全部岗位的来源</small></div>
+              <div class="workspace-stat"><span>近期练习记录</span><strong id="widget-attempts-display">0</strong><small>全部岗位 · 最近最多 30 条</small></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="feature-section" aria-labelledby="feature-heading">
+          <div class="feature-heading"><h2 id="feature-heading">开始准备</h2></div>
+          <div class="feature-grid">
+            <button type="button" class="feature-card" data-tab="search"><span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.5" cy="10.5" r="7"/><path d="m16 16 5 5"/></svg></span><strong>搜索面经</strong><span class="feature-description">按岗位查找公开面经，回到原帖核实来源。</span><span class="feature-action" aria-hidden="true">→</span></button>
+            <button type="button" class="feature-card" data-tab="practice"><span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v11H9l-5 4V5Z"/><path d="M8 9h8M8 12h5"/></svg></span><strong>练习与点评</strong><span class="feature-description">回答问题，获取 AI 点评与追问。</span><span class="feature-action" aria-hidden="true">→</span></button>
+            <button type="button" class="feature-card" data-tab="library"><span class="feature-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h14v16H7a2 2 0 0 1-2-2V4Z"/><path d="M5 17h14M9 8h6"/></svg></span><strong>我的资料库</strong><span class="feature-description">管理收藏的面经来源和个人题目。</span><span class="feature-action" aria-hidden="true">→</span></button>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Role settings -->
+      <div class="tab-pane role-page" id="pane-role">
+        <header class="role-page-header"><h1>岗位设置</h1></header>
+        <!-- Target Role Setting Card -->
+        <section class="section-block">
+          <div class="card target-role-card role-target-panel">
+            <h2 id="role-heading" class="card-title">目标岗位</h2>
+
+            <form id="role-form" class="apple-form-inline">
+              <div class="input-container">
+                <label class="sr-only" for="role">目标岗位</label>
+                <input id="role" name="role" maxlength="100" placeholder="例如：产品经理 / Java 后端开发 / 增长运营" required autocomplete="off">
+              </div>
+              <button class="apple-btn apple-btn-primary" type="submit">
+                <span>保存岗位</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+            </form>
+
+            <div class="quick-chips-group">
+              <span class="chips-label">快捷选择（点击立即保存）</span>
+              <button type="button" class="preset-chip" data-role="产品经理">产品经理</button>
+              <button type="button" class="preset-chip" data-role="Java 后端开发">Java 后端</button>
+              <button type="button" class="preset-chip" data-role="前端开发工程师">前端开发</button>
+              <button type="button" class="preset-chip" data-role="AI 算法/应用工程师">AI 工程师</button>
+              <button type="button" class="preset-chip" data-role="用户增长运营">增长运营</button>
+              <button type="button" class="preset-chip" data-role="项目经理 (PMO)">项目经理</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="section-block">
+          <div class="card role-jd-panel">
+            <div class="role-jd-heading"><h2 class="card-title">岗位描述与要求 <span class="role-optional">选填</span></h2>
+            <p class="card-subtitle">不同岗位分别保存；搜索和点评时，已确认的要求会发送给相应服务。</p></div>
+            <form id="jd-form" class="jd-form">
+              <div class="jd-editor-grid">
+                <div class="form-group jd-editor">
+                  <label for="jd-text">岗位描述</label>
+                  <textarea id="jd-text" rows="7" maxlength="20000" placeholder="粘贴职位描述（JD）"></textarea>
+                  <div class="jd-extract-row"><button type="button" class="apple-btn apple-btn-secondary compact" id="jd-extract">用 AI 提取要求 <span aria-hidden="true">→</span></button><span class="label-hint">提取时会将岗位描述发送给已配置的 AI 服务</span></div>
+                </div>
+                <div class="form-group jd-editor">
+                  <label for="jd-requirements">已确认的岗位要求</label>
+                  <textarea id="jd-requirements" rows="7" maxlength="10000" placeholder="直接填写，或检查并修改 AI 提取结果"></textarea>
+                  <p class="jd-editor-hint">请检查提取结果，确认后再保存。</p>
+                </div>
+              </div>
+              <div class="jd-actions jd-save-row"><span id="jd-status" class="inline-status" role="status"></span><button type="submit" class="apple-btn apple-btn-primary">保存岗位描述与要求</button></div>
+            </form>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- TAB 2: SEARCH (DISCOVER SOURCES) -->
+      <div class="tab-pane" id="pane-search">
+        <section class="card panel-card">
+          <div class="panel-header-row">
+            <div class="panel-header-copy">
+              <div class="search-header-title-wrap">
+                <h3 class="panel-title">发现面试经验</h3>
+                <button type="button" class="search-target-pill" id="search-target-pill" title="点击前往设置目标岗位">
+                  <span class="search-target-dot"></span>
+                  <span>当前岗位：<strong id="search-role-text">未设定</strong></span>
+                  <span class="search-target-arrow">↗</span>
+                </button>
+              </div>
+              <p class="card-subtitle">按目标岗位搜索面经，结果直接显示在这里；内容和日期请查阅原帖核实。</p>
+            </div>
+            <div class="icon-avatar-small blue">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            </div>
+          </div>
+
+          <form id="search-form" class="apple-form-vertical">
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="company">目标公司 <span class="label-hint">选填</span></label>
+                <div class="input-container">
+                  <input id="company" placeholder="例如：字节跳动、腾讯、美团、拼多多" autocomplete="off">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="range">时效过滤 <span class="label-hint">应用内搜索</span></label>
+                <div class="segmented-control" id="range-segmented" role="radiogroup" aria-label="时间范围">
+                  <button type="button" class="segment-btn active" data-val="year">近一年</button>
+                  <button type="button" class="segment-btn" data-val="6m">近半年</button>
+                  <button type="button" class="segment-btn" data-val="3m">近三个月</button>
+                  <button type="button" class="segment-btn" data-val="all">不限时间</button>
+                </div>
+                <select id="range" class="sr-only" aria-hidden="true">
+                  <option value="year" selected>近一年</option>
+                  <option value="6m">近半年</option>
+                  <option value="3m">近三个月</option>
+                  <option value="all">不限时间</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="search-source">搜索来源</label>
+              <select id="search-source" name="source" class="apple-select">
+                <option value="all">全部推荐来源（牛客、掘金、知乎）</option>
+                <option value="nowcoder">牛客</option>
+                <option value="juejin">掘金</option>
+                <option value="zhihu">知乎</option>
+              </select>
+            </div>
+
+            <div class="search-submit-bar">
+              <button class="apple-btn apple-btn-primary" type="submit" id="search-btn">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <span>搜索面经</span>
+              </button>
+            </div>
+          </form>
+
+          <div id="search-status" class="status-banner info" aria-live="polite">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            <span>搜索结果在本页展示，需要配置 Tavily；岗位、公司及已确认的岗位要求会发送给该服务。</span>
+          </div>
+          <div id="results" class="results-stream"></div>
+        </section>
+      </div>
+
+      <!-- TAB 3: PRACTICE (AI REVIEW & FOLLOW-UP) -->
+      <div class="tab-pane" id="pane-practice">
+        <header class="practice-page-header">
+          <h1>练习与点评</h1>
+        </header>
+
+        <div class="practice-layout">
+        <section class="card practice-compose" aria-labelledby="practice-compose-title">
+          <div class="practice-card-header">
+            <div><h2 id="practice-compose-title">开始练习</h2></div>
+            <span class="practice-step-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v11H9l-5 4V5Z"/><path d="M8 9h8M8 12h5"/></svg></span>
+          </div>
+
+          <form id="review-form" class="apple-form-vertical">
+            <div class="form-group">
+              <div class="label-split">
+                <label for="question">练习问题 <span class="practice-required">必填</span></label>
+              </div>
+              <div class="practice-question-actions" aria-label="选择问题方式">
+                <button type="button" class="practice-question-action" id="sample-q-btn"><span aria-hidden="true">✦</span> 填入岗位示例题</button>
+                <button type="button" class="practice-question-action" id="pick-from-lib-btn"><span aria-hidden="true">↻</span> 推荐下一题</button>
+              </div>
+              <div class="textarea-container">
+                <textarea id="question" rows="3" placeholder="输入你想练习的知识、场景或经历问题" required></textarea>
+              </div>
+              <p id="question-context" class="question-context" role="status" hidden></p>
+            </div>
+
+            <div class="form-group">
+              <div class="label-split">
+                <label for="answer">你的回答 <span class="practice-required">必填</span></label>
+                <span class="char-count" id="answer-char-count">0 字</span>
+              </div>
+              <div class="textarea-container">
+                <textarea id="answer" rows="7" placeholder="用自己的话回答。可以从背景、思路和结果展开，不需要一次答得完美。" required></textarea>
+              </div>
+            </div>
+
+            <div class="draft-bar"><span id="draft-status" role="status">草稿按岗位保存在本机</span><button type="button" class="text-link-action" id="clear-draft">清空草稿</button></div>
+
+            <div class="practice-submit-row"><button class="apple-btn apple-btn-primary practice-submit" type="submit" id="review-btn"><span>获取 AI 点评</span><span aria-hidden="true">→</span></button></div>
+            <div class="privacy-callout">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+              <span>点评时会发送岗位、已确认的岗位要求、问题和回答；回答追问时还会发送上一轮问题和回答。问题最多 2000 字，回答最多 10000 字；超出时请缩短后再提交。</span>
+            </div>
+          </form>
+        </section>
+
+        <section class="card practice-result" aria-labelledby="practice-result-title">
+          <div class="practice-result-header"><h2 id="practice-result-title">点评与追问</h2></div>
+          <div id="practice-result-empty" class="practice-result-empty">
+            <span class="practice-result-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 5h14v11H9l-4 3V5Z"/><path d="M9 9h6M9 12h4"/></svg></span>
+            <strong>点评会显示在这里</strong>
+            <p>填写问题和回答后，点击“获取 AI 点评”。</p>
+          </div>
+          <div id="review-status" class="status-banner neutral" role="status" aria-live="polite" hidden></div>
+          <div id="feedback" class="feedback-card" aria-live="polite" hidden></div>
+          <p class="practice-result-note">AI 点评仅供参考，请结合自己的实际情况判断。</p>
+        </section>
+        </div>
+        <!-- Recent History / Attempts Section -->
+        <section class="section-block practice-history" aria-labelledby="practice-history-title">
+          <div class="section-header-row practice-history-header">
+            <div class="section-title-wrap">
+              <h2 id="practice-history-title" class="panel-title">复习练习记录</h2>
+              <p class="section-desc">仅展示最近 30 条练习；真实面试记录请到“面试复盘”查看。</p>
+            </div>
+            <div class="practice-history-filter"><label for="attempt-role-scope">岗位范围</label><select id="attempt-role-scope" class="apple-select"><option value="current">当前岗位</option><option value="all">全部岗位（含岗位未知）</option></select></div>
+          </div>
+          <div id="attempts-list" class="attempts-stream"></div>
+        </section>
+      </div>
+
+      <!-- TAB 4: LIBRARY & QUESTION BANK -->
+      <div class="tab-pane" id="pane-library">
+        <header class="library-page-header">
+          <div>
+            <h1>我的资料库</h1>
+          </div>
+          <button class="apple-btn apple-btn-primary library-add" id="toggle-add" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>录入面经</span>
+          </button>
+        </header>
+
+        <div class="library-scope-bar">
+          <div class="library-scope-copy"><span class="library-scope-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/></svg></span><div><label for="library-role-scope">岗位范围</label><p>同时作用于面经来源和个人面试题。</p></div></div>
+          <div class="library-scope-field">
+            <select id="library-role-scope" class="apple-select">
+              <option value="current">当前岗位</option>
+              <option value="all">全部岗位（含岗位未知）</option>
+            </select>
+          </div>
+        </div>
+
+        <section class="library-section" aria-labelledby="library-sources-heading">
+          <div class="library-section-heading"><div><h2 id="library-sources-heading">面经来源 <span class="library-count">范围内 <span id="count">0</span> 条</span></h2></div></div>
+          <div class="library-source-panel">
+          <div class="library-filter-row"><span class="library-filter-label">内容类型</span><div class="library-filter-bar" aria-label="面经内容类型">
+            <button type="button" class="filter-pill active" data-filter="all" aria-pressed="true">全部来源</button>
+            <button type="button" class="filter-pill" data-filter="真实面经（自述）" aria-pressed="false">真实自述面经</button>
+            <button type="button" class="filter-pill" data-filter="博主整理" aria-pressed="false">博主整理题</button>
+            <button type="button" class="filter-pill" data-filter="来源未知" aria-pressed="false">其他/未知</button>
+          </div>
+          </div>
+          <div id="sources" class="source-list-grid"></div>
+          </div>
+        </section>
+
+        <section class="library-section library-personal-section" aria-labelledby="personal-questions-heading">
+          <div class="library-section-heading"><div><h2 id="personal-questions-heading">个人面试题 <span class="library-count">范围内 <span id="personal-count">0</span> 条</span></h2><p>来自真实面试复盘、由你主动加入题库的问题。</p></div><button type="button" class="library-subtle-link" data-tab="debrief">查看面试复盘 <span aria-hidden="true">→</span></button></div>
+          <div id="personal-interview-questions" class="source-list-grid"></div>
+        </section>
+
+
+      </div>
+
+      <!-- Real interview debriefs are separate from practice attempts. -->
+      <div class="tab-pane debrief-page" id="pane-debrief">
+        <header class="role-page-header"><h1>面试复盘</h1></header>
+        <section class="section-block personal-debrief-section">
+          <div class="card">
+            <h2 class="panel-title">记录一次面试</h2>
+            <p class="card-subtitle">记录真实面试中的问题和当时的回答，不计入复习练习记录。可选择将问题加入个人题库；复盘仅保存在本机。</p>
+            <form id="debrief-form" class="apple-form-vertical">
+              <div class="form-grid">
+                <div class="form-group"><label for="debrief-company">公司 <span class="label-hint">选填</span></label><input id="debrief-company" maxlength="100" placeholder="公司名称"></div>
+                <div class="form-group"><label for="debrief-date">面试发生时间 <span class="label-hint">选填</span></label><input id="debrief-date" type="date"></div>
+              </div>
+              <div class="form-group"><label for="debrief-question">被问到的问题</label><textarea id="debrief-question" rows="2" maxlength="2000" required></textarea></div>
+              <div class="form-group"><label for="debrief-answer">当时的回答 <span class="label-hint">选填</span></label><textarea id="debrief-answer" rows="3" maxlength="10000"></textarea></div>
+              <div class="form-group"><label for="debrief-notes">卡住的地方或后续追问 <span class="label-hint">选填</span></label><textarea id="debrief-notes" rows="2" maxlength="10000"></textarea></div>
+              <label class="checkbox-label"><input type="checkbox" id="debrief-library">将此面试问题加入个人题库，供日后练习</label>
+              <div><button class="apple-btn apple-btn-primary" type="submit">保存面试复盘</button></div>
+            </form>
+            <div class="debrief-history-heading"><h2 class="panel-title">面试复盘记录</h2></div>
+            <div id="debrief-list" class="debrief-list"></div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- TAB 5: SETTINGS & STATUS -->
+      <div class="tab-pane" id="pane-settings">
+        <section class="card panel-card">
+          <div class="panel-header-row">
+            <div class="panel-header-copy">
+              <h3 class="panel-title">系统偏好与服务状态</h3>
+            </div>
+            <div class="icon-avatar-small gray">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            </div>
+          </div>
+
+          <div class="settings-rows-list">
+            <div class="settings-row">
+              <div class="settings-row-text"><strong>备份与恢复</strong><p>导出的 JSON 包含个人信息，请妥善保管。导入时保留现有记录，冲突项不会覆盖。</p><p id="import-status" role="status"></p></div>
+              <div><a class="apple-btn apple-btn-secondary compact" href="/api/export" download>导出 JSON</a> <button type="button" class="apple-btn apple-btn-secondary compact" id="import-btn">导入备份</button><input id="import-file" type="file" accept="application/json,.json" hidden></div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <strong>本地数据库 (SQLite)</strong>
+                <p>资料保存在 <code>data/interview.sqlite</code>；搜索和 AI 功能会向已配置的服务发送相关内容。</p>
+              </div>
+              <span class="apple-pill green">已正常运行</span>
+            </div>
+
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <strong>网络搜索服务 (Tavily Search API)</strong>
+                <p>用于搜索公开资料。需配置 <code>$env:TAVILY_API_KEY</code>。</p>
+              </div>
+              <span class="apple-pill" id="settings-search-badge">检测中...</span>
+            </div>
+
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <strong>AI 复习点评服务 (LLM Completions)</strong>
+                <p>用于生成点评与追问。需配置 <code>$env:AI_API_KEY</code> 与 <code>$env:AI_MODEL</code>。</p>
+              </div>
+              <span class="apple-pill" id="settings-ai-badge">检测中...</span>
+            </div>
+
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <strong>数据使用</strong>
+                <p>搜索与 AI 点评会发送页面中说明的数据。本地服务仅供当前设备使用。</p>
+              </div>
+              <span class="apple-pill blue">本地存储</span>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Footer -->
+      <footer class="app-footer">
+        <div class="footer-left">
+          <span class="footer-brand">见面 · 面试准备助手</span>
+        </div>
+        <div class="footer-right">
+          <span></span>
+        </div>
+      </footer>
+    </div>
+  </main>
+</div>
+
+<!-- Next steps after a role is saved -->
+<dialog id="role-next-dialog" class="role-next-dialog" aria-labelledby="role-next-title" aria-describedby="role-next-description">
+  <div class="role-next-top"><span class="caption-label">岗位已保存</span><button type="button" class="sheet-close-btn" id="role-next-close" aria-label="关闭">×</button></div>
+  <h2 id="role-next-title">接下来想做什么？</h2>
+  <p id="role-next-description">可以先找面经、开始练习，也可以补充岗位描述，让后续准备更有针对性。</p>
+  <div class="role-next-actions">
+    <button type="button" class="role-next-choice" data-next="search"><strong>搜索面经 <span aria-hidden="true">→</span></strong><span>按目标岗位查找公开资料</span></button>
+    <button type="button" class="role-next-choice" data-next="practice"><strong>开始练习 <span aria-hidden="true">→</span></strong><span>输入问题与回答，获取点评</span></button>
+    <button type="button" class="role-next-choice" data-next="jd"><strong>补充岗位描述 <span aria-hidden="true">→</span></strong><span>填写 JD 和已确认的要求（选填）</span></button>
+  </div>
+  <button type="button" class="apple-btn apple-btn-secondary role-next-later" id="role-next-later">稍后再说</button>
+</dialog>
+
+<!-- macOS Sheet Modal: Add New Source -->
+<div class="modal-backdrop" id="modal-backdrop" hidden>
+  <div class="macos-sheet-dialog">
+    <div class="sheet-header">
+      <div>
+        <h3 class="sheet-title">录入新面经来源</h3>
+        <p class="sheet-subtitle">记录原帖出处并摘录典型面试考题，随时归入专项复习。</p>
+      </div>
+      <button type="button" class="sheet-close-btn" id="modal-close-btn" aria-label="关闭">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+
+    <form id="source-form" class="sheet-form">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="source-title">面经标题</label>
+          <input id="source-title" required maxlength="1000" placeholder="例如：字节跳动电商产品二面真题" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="source-url">原文链接</label>
+          <input id="source-url" type="url" required placeholder="https://..." autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="source-date">发布时间 <span class="label-hint">用户填报</span></label>
+          <input id="source-date" type="date">
+        </div>
+        <div class="form-group">
+          <label for="source-interview-date">面试发生时间 <span class="label-hint">选填，用户填报</span></label>
+          <input id="source-interview-date" type="date">
+        </div>
+        <div class="form-group">
+          <label for="source-type">内容属性</label>
+          <select id="source-type" class="apple-select">
+            <option value="真实面经（自述）">真实面经（自述）</option>
+            <option value="博主整理">博主整理</option>
+            <option value="来源未知" selected>来源未知</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top: 14px;">
+          <label for="source-question">题目摘录 <span class="label-hint">选填；确认后可用于练习</span></label>
+        <textarea id="source-question" rows="3" placeholder="复制原文中的核心面试题，后续直接点击练题"></textarea>
+      </div>
+      <div class="sheet-footer">
+        <button type="button" class="apple-btn apple-btn-secondary" id="cancel-add-btn">取消</button>
+        <button class="apple-btn apple-btn-primary" type="submit">保存到资料库</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Apple Dynamic Island / HUD Style Toast -->
+<div id="sonner-toaster" class="sonner-toaster" role="region" aria-label="系统通知"></div>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

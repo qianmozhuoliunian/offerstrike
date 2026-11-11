@@ -10,7 +10,7 @@ const invalidation = app.slice(app.indexOf(' function invalidateSearchForRoleCha
 const searchHandlers = app.slice(app.indexOf(' // Search form submission'), app.indexOf(' // AI Review submission'));
 
 function harness() {
-  const handlers = {}, calls = [], messages = [];
+  const handlers = {}, calls = [], messages = [], opened = [];
   const button = {disabled:false,innerHTML:'搜索'};
   const results = {innerHTML:'',replaceChildren(){this.innerHTML='';},addEventListener(type,fn){handlers['results:'+type]=fn;}};
   const form = {addEventListener(type,fn){handlers['form:'+type]=fn;}};
@@ -18,10 +18,13 @@ function harness() {
   const elements = {'#search-form':form,'#search-btn':button,'#search-status':status,'#results':results,'#company':{value:''},'#range':{value:'year'}};
   const api = (path,method,data,signal) => new Promise((resolve,reject) => calls.push({path,method,data,signal,resolve,reject}));
   const toast = {success:message=>messages.push(message),error:message=>messages.push(message)};
-  const context=vm.createContext({AbortController,api,toast,escapeHtml:s=>String(s ?? ''),$:s=>elements[s],refresh:async()=>{},window:{}});
+  const openSourceQuestionEditor=async (id,role)=>opened.push({id,role});
+  const context=vm.createContext({AbortController,api,toast,openSourceQuestionEditor,escapeHtml:s=>String(s ?? ''),$:s=>elements[s],refresh:async()=>{},window:{}});
   vm.runInContext(`let state={role:'岗位甲'}; let searchBatch=null; let searchRequestId=0; let searchController=null; let searchButtonMarkup=''; ${invalidation}\n${searchHandlers}`,context);
-  return {context,handlers,calls,messages,button,status,results};
+  return {context,handlers,calls,messages,button,status,results,opened};
 }
+
+const targetFor=(selector,button)=>({closest:query=>query===selector ? button : null});
 
 test('search results and saved sources remain bound to their original role', async () => {
   const h=harness();
@@ -34,7 +37,7 @@ test('search results and saved sources remain bound to their original role', asy
   assert.match(h.results.innerHTML,/来源/);
   assert.match(h.results.innerHTML,/收藏来源/);
   const saveButton={dataset:{save:'0'},disabled:false};
-  const saving=h.handlers['results:click']({target:{closest:()=>saveButton}});
+  const saving=h.handlers['results:click']({target:targetFor('[data-save]',saveButton)});
   assert.equal(h.calls[1].data.role,'岗位甲');
   // A role switch after clicking Save cannot change the payload already sent.
   vm.runInContext("state.role='岗位乙'; invalidateSearchForRoleChange()",h.context);
@@ -60,12 +63,13 @@ test('search errors and empty results are shown in the page', async () => {
 
 test('long results are readable, saved sources are marked, and changed filters are explained', async () => {
   const h=harness();
-  vm.runInContext("state.sources=[{role:'岗位甲',url:'https://example.org'}]",h.context);
+  vm.runInContext("state.sources=[{id:'existing',role:'岗位甲',url:'https://example.org'}]",h.context);
   const pending=h.handlers['form:submit']({preventDefault(){}});
   h.calls[0].resolve({results:[{title:'来源',url:'https://example.org',snippet:'# 标题 ' + '内容'.repeat(150)}]});
   await pending;
   assert.match(h.results.innerHTML,/查看完整摘要/);
   assert.match(h.results.innerHTML,/已收藏/);
+  assert.match(h.results.innerHTML,/data-organize="0"\s*>整理题目/);
   assert.match(h.results.innerHTML,/disabled/);
   assert.match(h.status.textContent,/不限公司 · 近一年/);
   vm.runInContext("$('#company').value='某公司'",h.context);
@@ -80,7 +84,7 @@ test('successful save stays saved even if refreshing the page state fails', asyn
   h.calls[0].resolve({results:[{title:'来源',url:'https://example.org'}]});
   await pending;
   const saveButton={dataset:{save:'0'},disabled:false,textContent:''};
-  const saving=h.handlers['results:click']({target:{closest:()=>saveButton}});
+  const saving=h.handlers['results:click']({target:targetFor('[data-save]',saveButton)});
   h.calls[1].resolve({id:'saved'});
   await saving;
   assert.equal(saveButton.disabled,true);
@@ -93,9 +97,23 @@ test('switching roles invalidates completed results and cannot save stale result
   const pending=h.handlers['form:submit']({preventDefault(){}});
   h.calls[0].resolve({notice:'',results:[{title:'来源',url:'https://example.org'}]}); await pending;
   vm.runInContext("state.role='岗位乙'; invalidateSearchForRoleChange()",h.context);
-  await h.handlers['results:click']({target:{closest:()=>({dataset:{save:'0'},disabled:false})}});
+  await h.handlers['results:click']({target:targetFor('[data-save]',{dataset:{save:'0'},disabled:false})});
   assert.equal(h.calls.length,1);
   assert.match(h.status.textContent,/重新搜索/);
+});
+
+test('a saved search result opens the matching source editor without creating a question', async () => {
+  const h=harness();
+  const pending=h.handlers['form:submit']({preventDefault(){}});
+  h.calls[0].resolve({results:[{title:'来源',url:'https://example.org'}]}); await pending;
+  const organize={hidden:true, dataset:{organize:'0'}};
+  const saveButton={dataset:{save:'0'},disabled:false,textContent:'',closest:()=>({querySelector:()=>organize})};
+  const saving=h.handlers['results:click']({target:targetFor('[data-save]',saveButton)});
+  h.calls[1].resolve({id:'saved-source'}); await saving;
+  assert.equal(organize.hidden,false);
+  await h.handlers['results:click']({target:targetFor('[data-organize]',organize)});
+  assert.deepEqual(h.opened,[{id:'saved-source',role:'岗位甲'}]);
+  assert.equal(h.calls.length,2);
 });
 
 test('late search results remain invalid after switching away and back', async () => {

@@ -26,10 +26,13 @@ import { createToast } from './ui/toast.js';
  let questionContext = null;
  let searchBatch = null;
  let searchRequestId = 0;
+ let roleRevision = 0;
  let searchController = null;
  let searchButtonMarkup = '';
  const noteDrafts = new Map();
  const topicDrafts = new Map();
+ const questionDrafts = new Map();
+ const questionSaveStates = new Map();
 
  const tabTitles = {
    dashboard: '备考工作台',
@@ -105,7 +108,7 @@ const toast = createToast(escapeHtml);
 
  window.addEventListener('hashchange', () => {
    const hash = window.location.hash.slice(1);
-   if (hash && tabTitles[hash]) {
+   if (hash && tabTitles[hash] && !$('#pane-' + hash)?.classList.contains('active')) {
      switchTab(hash);
    }
  });
@@ -299,6 +302,8 @@ const toast = createToast(escapeHtml);
      const interviewDateLabel = s.interview_date ? `面试 ${escapeHtml(s.interview_date)} · 用户填报` : '面试时间未知';
      const questions = Array.isArray(s.questions) ? s.questions : [];
      const legacy = s.legacy_question ?? s.question ?? '';
+     const draft = questionDrafts.get(s.id) || {text:'', topic:''};
+     const saveState = questionSaveStates.get(s.id);
      return `
        <article class="source-item-card">
          <div class="source-card-main">
@@ -337,10 +342,15 @@ const toast = createToast(escapeHtml);
                <summary>＋ 添加关联题目</summary>
                <form class="add-question-form" data-question-form="${escapeHtml(s.id)}">
                  <label for="question-${escapeHtml(s.id)}">从原帖摘录或输入问题</label>
-                 <textarea id="question-${escapeHtml(s.id)}" name="text" rows="2" required maxlength="2000" placeholder="确认问题内容后保存"></textarea>
+                 <textarea id="question-${escapeHtml(s.id)}" name="text" rows="2" required maxlength="2000" ${saveState === 'saving' ? 'disabled' : saveState === 'saved' ? 'readonly' : ''} placeholder="核对原帖后输入题目">${escapeHtml(draft.text)}</textarea>
+                 <span class="question-source-hint">请核对原帖；搜索摘要不会自动作为题目保存。</span>
                   <label for="new-topic-${escapeHtml(s.id)}">题目主题（选填）</label>
-                  <input id="new-topic-${escapeHtml(s.id)}" name="topic" maxlength="100" placeholder="例如：缓存、项目管理">
-                 <button type="submit" class="apple-btn apple-btn-secondary compact">保存题目</button>
+                  <input id="new-topic-${escapeHtml(s.id)}" name="topic" maxlength="100" ${saveState === 'saving' ? 'disabled' : saveState === 'saved' ? 'readonly' : ''} value="${escapeHtml(draft.topic)}" placeholder="例如：缓存、项目管理">
+                 <div class="question-form-actions">
+                   <button type="submit" class="apple-btn apple-btn-secondary" name="action" value="save" ${saveState ? 'disabled' : ''}>保存题目</button>
+                   <button type="submit" class="apple-btn apple-btn-primary" name="action" value="practice" ${saveState ? 'disabled' : ''}>保存并练习</button>
+                 </div>
+                 <span class="question-form-status" role="status" aria-live="polite">${saveState === 'saving' ? '正在保存题目…' : saveState === 'saved' ? '题目已保存，但页面刷新失败；请刷新后查看，避免重复保存。' : ''}</span>
                </form>
              </details>
            </div>
@@ -491,7 +501,7 @@ const toast = createToast(escapeHtml);
 
  async function refresh() {
     const nextState = await api('/api/state');
-    if (state.role !== nextState.role) invalidateSearchForRoleChange();
+    if (state.role !== nextState.role) { roleRevision++; invalidateSearchForRoleChange(); }
     state = nextState;
    render();
  }
@@ -564,6 +574,49 @@ const toast = createToast(escapeHtml);
     question.value = text;
     setQuestionContext(null);
    scheduleDraft();
+   return true;
+ }
+
+ async function openSourceQuestionEditor(sourceId, role) {
+   const revision = roleRevision;
+   const batch = searchBatch;
+   if (!sourceId || state.role !== role) { toast.error('岗位已切换，请重新搜索'); return; }
+   if (!state.sources.some(source => source.id === sourceId && source.role === role)) {
+     try { await refresh(); } catch { toast.error('来源已收藏，但读取失败，请刷新后重试'); return; }
+   }
+   if (roleRevision !== revision || state.role !== role || searchBatch !== batch) { toast.error('搜索结果或岗位已变化，请重新选择来源'); return; }
+   const source = state.sources.find(item => item.id === sourceId && item.role === role);
+   if (!source) { toast.error('找不到已收藏的来源，请刷新后重试'); return; }
+   const scope = $('#library-role-scope');
+   if (scope) scope.value = 'current';
+   activeFilter = 'all';
+   $$('.filter-pill').forEach(pill => {
+     const selected = pill.dataset.filter === 'all';
+     pill.classList.toggle('active', selected);
+     pill.setAttribute('aria-pressed', String(selected));
+   });
+   renderSources();
+   switchTab('library');
+   const input = document.getElementById('question-' + sourceId);
+   if (!input) { toast.error('无法打开题目编辑区，请刷新后重试'); return; }
+   const details = input.closest('details');
+   if (details) details.open = true;
+   requestAnimationFrame(() => {
+     if (state.role !== role || window.location.hash !== '#library' || !input.isConnected) return;
+     input.scrollIntoView({behavior:'instant', block:'center'});
+     input.focus();
+   });
+ }
+
+ function practiceSourceQuestion(source, target) {
+   if ((!state.role || source.role !== state.role) && !window.confirm(`此题来自「${source.role || '岗位未知'}」，将按当前岗位「${state.role || '未设置'}」进行练习。是否继续？`)) return false;
+   if (!loadPracticeQuestion(target.text)) return false;
+   const matches = state.sources.filter(item => item.role === source.role && (item.questions || []).some(question => question.text.trim() === target.text.trim()));
+   const sources = (matches.length ? matches : [source]).map(item => ({title:item.title,url:item.url,date:item.date,type:item.type}));
+   setQuestionContext({text:target.text,questionRef:source.role===state.role ? {kind:'source',id:target.id} : null,topics:target.topic ? [target.topic] : [],sources});
+   switchTab('practice');
+   $('#answer')?.focus();
+   toast('考题已载入复习面板');
    return true;
  }
 
@@ -743,6 +796,8 @@ const toast = createToast(escapeHtml);
    sourcesContainer.addEventListener('input', e => {
      const form = e.target.closest('[data-note-form]');
      if (form && e.target.name === 'note') noteDrafts.set(form.dataset.noteForm, e.target.value);
+     const questionForm = e.target.closest('[data-question-form]');
+     if (questionForm) questionDrafts.set(questionForm.dataset.questionForm, {text:questionForm.elements.text.value, topic:questionForm.elements.topic.value});
    });
    sourcesContainer.addEventListener('submit', async e => {
      const dateForm = e.target.closest('[data-source-date-form]');
@@ -781,15 +836,48 @@ const toast = createToast(escapeHtml);
      e.preventDefault();
      const text = form.elements.text.value.trim();
      if (!text) return;
-     const button = form.querySelector('button[type="submit"]');
-     button.disabled = true;
+     const sourceId = form.dataset.questionForm;
+     const source = state.sources.find(item => item.id === sourceId);
+     if (!source) { toast.error('来源不存在，请刷新页面'); return; }
+     if (questionSaveStates.has(sourceId)) return;
+     const roleAtSubmit = state.role, revisionAtSubmit = roleRevision;
+     const practice = e.submitter?.value === 'practice';
+     const controls = [...form.querySelectorAll('button, textarea, input')];
+     const status = form.querySelector('.question-form-status');
+     questionSaveStates.set(sourceId, 'saving');
+     controls.forEach(control => { control.disabled = true; });
+     if (status) status.textContent = '正在保存题目…';
+     let savedQuestion;
      try {
-       await api('/api/sources/' + encodeURIComponent(form.dataset.questionForm) + '/questions', 'POST', {text,topic:form.elements.topic.value});
-       await refresh();
-       toast.success('题目已保存，可从该来源开始练习');
+       savedQuestion = await api('/api/sources/' + encodeURIComponent(sourceId) + '/questions', 'POST', {text,topic:form.elements.topic.value});
      } catch (err) {
-       toast.error(err.message);
-       button.disabled = false;
+       questionSaveStates.delete(sourceId);
+       if (status) status.textContent = '保存失败：' + err.message;
+       controls.forEach(control => { control.disabled = false; });
+       if (form.isConnected === false) { renderSources(); toast.error('题目保存失败：' + err.message); }
+       return;
+     }
+     questionDrafts.delete(sourceId);
+     questionSaveStates.set(sourceId, 'saved');
+     try { await refresh(); }
+     catch {
+       if (status) status.textContent = '题目已保存，但页面刷新失败；请刷新后查看，避免重复保存。';
+       controls.filter(control => control.tagName !== 'BUTTON').forEach(control => { control.disabled = false; control.readOnly = true; });
+       toast.error('题目已保存，但页面刷新失败；请刷新后查看，避免重复保存');
+       return;
+     }
+     questionSaveStates.delete(sourceId);
+     renderSources();
+     if (roleRevision !== revisionAtSubmit || state.role !== roleAtSubmit) {
+       toast.success(`题目已保存到「${source.role || '岗位未知'}」，岗位已变化，未跳转练习`);
+       return;
+     }
+     const updatedSource = state.sources.find(item => item.id === sourceId);
+     const updatedQuestion = updatedSource?.questions?.find(item => item.id === savedQuestion.id);
+     if (practice && updatedSource && updatedQuestion) {
+       if (!practiceSourceQuestion(updatedSource, updatedQuestion)) toast.success('题目已保存，可稍后练习');
+     } else {
+       toast.success(practice ? '题目已保存，请在资料库查看后练习' : '题目已保存，可从该来源开始练习');
      }
    });
    sourcesContainer.addEventListener('click', async e => {
@@ -801,12 +889,15 @@ const toast = createToast(escapeHtml);
       details.open = true;
       const input = details.querySelector('textarea');
       input.value = source?.legacy_question ?? source?.question ?? '';
+      const form = input.closest('[data-question-form]');
+      if (form) questionDrafts.set(form.dataset.questionForm, {text:input.value, topic:form.elements.topic.value});
       input.focus();
       return;
     }
     const deleteBtn = e.target.closest('[data-delete]');
     if (deleteBtn) {
       const id = deleteBtn.dataset.delete;
+      if (questionSaveStates.get(id) === 'saving') { toast.error('请等待题目保存完成后再移除来源'); return; }
       if (!deleteBtn.classList.contains('confirming')) {
         deleteBtn.classList.add('confirming');
         deleteBtn.textContent = '确认移除来源及题目？';
@@ -821,6 +912,8 @@ const toast = createToast(escapeHtml);
 
        try {
          await api('/api/sources/' + id, 'DELETE');
+         questionDrafts.delete(id);
+         questionSaveStates.delete(id);
          await refresh();
         toast.success('已自题库中移除');
        } catch (err) {
@@ -834,14 +927,7 @@ const toast = createToast(escapeHtml);
        const source = state.sources.find(s => (s.questions || []).some(q => q.id === practiceId));
        const target = source?.questions.find(q => q.id === practiceId);
        if (target && target.text) {
-         if ((!state.role || source.role !== state.role) && !window.confirm(`此题来自「${source.role || '岗位未知'}」，将按当前岗位「${state.role || '未设置'}」进行练习。是否继续？`)) return;
-         if (!loadPracticeQuestion(target.text)) return;
-          const matches=state.sources.filter(s=>s.role===source.role && (s.questions || []).some(q=>q.text.trim()===target.text.trim()));
-          setQuestionContext({text:target.text,questionRef:source.role===state.role ? {kind:'source',id:target.id} : null,topics:target.topic ? [target.topic] : [],sources:matches.map(s=>({title:s.title,url:s.url,date:s.date,type:s.type}))});
-         switchTab('practice');
-         const aInput = $('#answer');
-         if (aInput) aInput.focus();
-         toast('考题已载入复习面板');
+         practiceSourceQuestion(source, target);
        }
      }
    });
@@ -1070,7 +1156,8 @@ const toast = createToast(escapeHtml);
        if (data.results && data.results.length) {
          if (resultsEl) {
            resultsEl.innerHTML = data.results.map((r, i) => {
-             const saved = (state.sources || []).some(s => s.role === role && s.url === r.url);
+             const saved = (state.sources || []).find(s => s.role === role && s.url === r.url);
+             r.savedSourceId = saved?.id || '';
              const platformClass = r.platform === '牛客' ? 'platform-nowcoder' : r.platform === '掘金' ? 'platform-juejin' : r.platform === '知乎' ? 'platform-zhihu' : 'gray';
              return `
              <article class="result-item">
@@ -1087,7 +1174,10 @@ const toast = createToast(escapeHtml);
                </h4>
                ${searchSnippet(r.snippet)}
                <div class="result-footer">
-                 <button type="button" class="result-action-btn ${saved ? 'saved' : ''}" data-save="${i}" ${saved ? 'disabled' : ''}>${saved ? '已收藏' : '+ 收藏来源'}</button>
+                 <div class="result-actions">
+                   <button type="button" class="result-action-btn ${saved ? 'saved' : ''}" data-save="${i}" ${saved ? 'disabled' : ''}>${saved ? '已收藏' : '+ 收藏来源'}</button>
+                   <button type="button" class="apple-btn apple-btn-secondary result-organize" data-organize="${i}" ${saved?.id ? '' : 'hidden'}>整理题目</button>
+                 </div>
                  <a href="${escapeHtml(r.url)}" class="result-open-link" target="_blank" rel="noopener noreferrer">
                    <span>打开原帖</span>
                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
@@ -1149,6 +1239,14 @@ const toast = createToast(escapeHtml);
           }
         }
       }
+      const organizeButton = e.target.closest('[data-organize]');
+      if (organizeButton) {
+        const batch = searchBatch;
+        const item = batch?.results[Number(organizeButton.dataset.organize)];
+        if (!item?.savedSourceId || state.role !== batch.role) { toast.error('来源或岗位已变化，请重新搜索'); return; }
+        await openSourceQuestionEditor(item.savedSourceId, batch.role);
+        return;
+      }
       const saveButton = e.target.closest('[data-save]');
       if (!saveButton || saveButton.disabled) return;
       const batch = searchBatch;
@@ -1158,7 +1256,7 @@ const toast = createToast(escapeHtml);
       saveButton.disabled = true;
       let saved = false;
      try {
-       await api('/api/sources', 'POST', {
+       const result = await api('/api/sources', 'POST', {
          ...item,
          date: item.date || '',
          type: '来源未知',
@@ -1167,8 +1265,13 @@ const toast = createToast(escapeHtml);
        });
        saved = true;
        saveButton.textContent = '已收藏';
+       item.savedSourceId = result.id;
+       if (searchBatch === batch && state.role === batch.role) {
+         const organize = saveButton.closest?.('.result-item')?.querySelector('[data-organize]');
+         if (organize) organize.hidden = false;
+       }
        try { await refresh(); } catch { toast.error('来源已收藏，但页面数据刷新失败，请刷新页面查看'); return; }
-       toast.success(`来源已收藏到「${batch.role}」，核实原文后可添加题目`);
+       toast.success(`来源已收藏到「${batch.role}」，核实原帖后可整理题目`);
      } catch (err) {
       toast.error(err.message);
       } finally {

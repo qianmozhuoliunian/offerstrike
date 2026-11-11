@@ -1888,6 +1888,8 @@ input[type=checkbox]:focus-visible {
 .add-question-panel summary { cursor: pointer; color: var(--apple-blue); font-weight: 600; }
 .add-question-form { display: grid; gap: 8px; margin-top: 12px; justify-items: start; }
 .add-question-form textarea { width: 100%; }
+.question-source-hint, .question-form-status { color: var(--lens-text-secondary); font-size: 13px; line-height: 1.5; }
+.question-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .jd-form { display: grid; gap: 15px; margin-top: 20px; }
 .jd-actions, .draft-bar, .debrief-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .inline-status, .draft-bar { font-size: 12px; color: var(--apple-text-secondary); }
@@ -2555,6 +2557,8 @@ body { background: var(--lens-bg); }
 .result-details.is-collapsing .result-details-chevron {
   transform: rotate(0deg) !important;
 }
+.result-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.result-organize[hidden] { display: none; }
 .result-footer {
   display: flex;
   align-items: center;

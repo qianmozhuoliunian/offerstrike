@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { searchRequest, searchSource, searchPublishedDate, parseRequirements, parseReview } from '../src/services.js';
+import { searchRequest, searchSource, searchPublishedDate, parseRequirements, parseReview, parsePracticeHelp } from '../src/services.js';
 import { isAllowedRequest } from '../src/request-security.js';
 import { filterSearchRelevance } from '../src/search-relevance.js';
 
@@ -59,6 +59,11 @@ test('review parser rejects malformed or unusable model responses while allowing
   }
   assert.throws(() => parseReview(JSON.stringify({feedback:'a'.repeat(10001),follow_up:''})),/格式/);
   assert.throws(() => parseReview(JSON.stringify({feedback:'点评',follow_up:'a'.repeat(2001)})),/格式/);
+});
+
+test('practice help accepts only a nonempty bounded text response', () => {
+  assert.equal(parsePracticeHelp('{"guidance":"  先想目标  "}'),'先想目标');
+  for (const content of ['', 'plain text', '{}', '{"guidance":""}', '{"guidance":null}', JSON.stringify({guidance:'a'.repeat(6001)})]) assert.throws(()=>parsePracticeHelp(content),/AI 帮助/);
 });
 
 test('local requests reject foreign origins, hosts and simple content types', () => {

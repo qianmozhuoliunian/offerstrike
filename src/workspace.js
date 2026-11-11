@@ -107,10 +107,10 @@ export function setAssessment(db, id, rating) {
   return {rating};
 }
 
-export function recommendQuestion(db, role) {
+export function recommendQuestion(db, role, excludeText = '') {
   role = validRole(role);
   const sources=listSources(db).filter(s=>s.role===role).flatMap(s=>s.questions.map(q=>({role,text:q.text,question_ref:{kind:'source',id:q.id},questionCreated:q.created,topic:q.topic,sourceId:s.id,sourceTitle:s.title,sourceUrl:s.url,sourceDate:s.date,sourceType:s.type,interviewDate:s.interview_date})));
   const personal=db.prepare("SELECT d.id,d.question,d.created,COALESCE(t.topic,'') AS topic FROM debriefs d LEFT JOIN question_topics t ON t.kind='debrief' AND t.question_id=d.id WHERE d.role=? AND d.include_in_library=1").all(role).map(d=>({role,text:d.question,question_ref:{kind:'debrief',id:d.id},questionCreated:d.created,topic:d.topic,sourceId:'debrief:'+d.id,sourceTitle:'个人面试记录',sourceType:'个人面试记录'}));
   const attempts=db.prepare('SELECT a.id,a.role,a.question,a.created,aa.rating,l.kind AS refKind,l.question_id AS refId FROM attempts a LEFT JOIN attempt_assessments aa ON aa.attempt_id=a.id LEFT JOIN attempt_question_links l ON l.attempt_id=a.id WHERE a.role=?').all(role);
-  return recommendFromHistory({role,candidates:[...sources,...personal],attempts});
+  return recommendFromHistory({role,candidates:[...sources,...personal],attempts,excludeText});
 }

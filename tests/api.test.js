@@ -21,6 +21,8 @@ test('HTTP workflow validates JD output, isolates roles, imports safely and reje
       assert.equal(request.response_format.type,'json_object');
       const result=jd.includes('数据分析') ? {status:'ok',items:[{requirement:'负责数据分析',evidence:'负责数据分析'}]} : {status:'insufficient',items:[]};
       content=JSON.stringify(result);
+    } else if (request.messages[0].content.includes('面试题学习助手')) {
+      content=jd.includes('__bad_help__') ? '{invalid' : JSON.stringify({guidance:'先明确业务目标，再考虑衡量方式。'});
     } else {
       if (jd.includes('本轮问题：具体如何选指标？')) { assert.match(jd,/上轮问题：如何做数据分析？/); assert.match(jd,/上轮回答：先确定业务目标/); }
       const fixture=reviewCases.find(item => jd.includes(`本轮回答：${item.answer}`));
@@ -70,6 +72,25 @@ test('HTTP workflow validates JD output, isolates roles, imports safely and reje
     const question_ref={kind:'source',id:sourceQuestion.id};
     const requirements='要求'.repeat(1600)+'要求末尾';
     assert.equal((await post('/api/jd',{role:'产品经理',jd:'岗位描述',confirmed_requirements:requirements})).status,200);
+    const attemptsBeforeHelp=(await (await fetch(base+'/api/state')).json()).attempts.length;
+    for (const mode of ['hint','breakdown','approach']) {
+      const help=await post('/api/practice/help',{role:'产品经理',question:'如何评估产品？',mode,answer:'不应发送的回答'});
+      assert.equal(help.status,200);
+      assert.equal((await help.json()).guidance,'先明确业务目标，再考虑衡量方式。');
+      const request=modelRequests.at(-1);
+      assert.match(request.messages.at(-1).content,/如何评估产品/);
+      assert.ok(request.messages.at(-1).content.includes(requirements));
+      assert.doesNotMatch(JSON.stringify(request),/不应发送的回答/);
+    }
+    assert.equal((await (await fetch(base+'/api/state')).json()).attempts.length,attemptsBeforeHelp);
+    const beforeInvalidHelp=modelRequests.length;
+    assert.equal((await post('/api/practice/help',{role:'产品经理',question:'题目',mode:'invalid'})).status,400);
+    assert.equal((await post('/api/practice/help',{role:'产品经理',question:'题'.repeat(2001),mode:'hint'})).status,400);
+    assert.equal(modelRequests.length,beforeInvalidHelp);
+    const malformedHelp=await post('/api/practice/help',{role:'产品经理',question:'__bad_help__',mode:'hint'});
+    assert.equal(malformedHelp.status,400);
+    assert.match((await malformedHelp.json()).error,/AI 帮助格式无效/);
+    assert.equal((await (await fetch(base+'/api/state')).json()).attempts.length,attemptsBeforeHelp);
     const maxQuestion='问'.repeat(1999)+'尾', maxAnswer='答'.repeat(9999)+'尾';
     const fullReview=await post('/api/review',{role:'产品经理',question:maxQuestion,answer:maxAnswer});
     assert.equal(fullReview.status,200);

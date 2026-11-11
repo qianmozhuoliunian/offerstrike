@@ -301,6 +301,14 @@
                 <textarea id="question" rows="3" placeholder="输入你想练习的知识、场景或经历问题" required></textarea>
               </div>
               <p id="question-context" class="question-context" role="status" hidden></p>
+              <div id="recommendation-choice" class="recommendation-choice" hidden>
+                <p id="recommendation-message" role="status" aria-live="polite"></p>
+                <div class="practice-help-actions">
+                  <button type="button" class="practice-question-action" id="practice-suggested-anyway" hidden>继续练这道</button>
+                  <button type="button" class="practice-question-action" data-tab="search">寻找更多面经</button>
+                  <button type="button" class="practice-question-action" data-tab="library">去资料库</button>
+                </div>
+              </div>
             </div>
 
             <div class="form-group">
@@ -312,6 +320,18 @@
                 <textarea id="answer" rows="7" placeholder="用自己的话回答。可以从背景、思路和结果展开，不需要一次答得完美。" required></textarea>
               </div>
             </div>
+
+            <section id="practice-help" class="practice-help" aria-labelledby="practice-help-title">
+              <div class="practice-help-heading"><strong id="practice-help-title">暂时没有思路？</strong><span>可以先获得一点帮助</span></div>
+              <div class="practice-help-actions" aria-label="选择 AI 帮助方式">
+                <button type="button" class="practice-question-action" data-practice-help="hint">给我一点提示</button>
+                <button type="button" class="practice-question-action" data-practice-help="breakdown">带我拆解这题</button>
+                <button type="button" class="practice-question-action" data-practice-help="approach">看看参考思路</button>
+              </div>
+              <p class="practice-help-privacy">请求帮助会发送岗位、已确认的岗位要求和题目，不发送回答。</p>
+              <p id="practice-help-status" class="practice-help-status" role="status" aria-live="polite" hidden></p>
+              <div id="practice-help-result" class="practice-help-result" hidden><strong id="practice-help-label">AI 生成，仅供参考</strong><p id="practice-help-content"></p></div>
+            </section>
 
             <div class="draft-bar"><span id="draft-status" role="status">草稿按岗位保存在本机</span><button type="button" class="text-link-action" id="clear-draft">清空草稿</button></div>
 

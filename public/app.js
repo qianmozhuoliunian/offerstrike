@@ -29,6 +29,10 @@ import { createToast } from './ui/toast.js';
  let roleRevision = 0;
  let searchController = null;
  let searchButtonMarkup = '';
+ let helpRequestId = 0;
+ let helpController = null;
+ let recommendationRequestId = 0;
+ let pendingRecommendation = null;
  const noteDrafts = new Map();
  const topicDrafts = new Map();
  const questionDrafts = new Map();
@@ -501,7 +505,7 @@ const toast = createToast(escapeHtml);
 
  async function refresh() {
     const nextState = await api('/api/state');
-    if (state.role !== nextState.role) { roleRevision++; invalidateSearchForRoleChange(); }
+    if (state.role !== nextState.role) { roleRevision++; invalidateSearchForRoleChange(); clearPracticeHelp(); clearRecommendationChoice(); }
     state = nextState;
    render();
  }
@@ -566,10 +570,30 @@ const toast = createToast(escapeHtml);
    }
  }
 
+ function clearPracticeHelp() {
+   helpRequestId++;
+   helpController?.abort();
+   helpController = null;
+   $$('#practice-help [data-practice-help]').forEach(button => { button.disabled = false; });
+   const status = $('#practice-help-status'), result = $('#practice-help-result');
+   if (status) { status.hidden = true; status.textContent = ''; }
+   if (result) result.hidden = true;
+ }
+
+ function clearRecommendationChoice() {
+   recommendationRequestId++;
+   pendingRecommendation = null;
+   const notice = $('#recommendation-choice');
+   if (notice) notice.hidden = true;
+   const button = $('#pick-from-lib-btn');
+   if (button) button.disabled = false;
+ }
+
  function loadPracticeQuestion(text) {
    const question = $('#question');
    const answer = $('#answer');
    if (question.value !== text && answer.value.trim() && !window.confirm('切换题目会替换当前回答，确定继续吗？')) return false;
+   if (question.value !== text) { clearPracticeHelp(); clearRecommendationChoice(); }
    if (question.value !== text) { answer.value = ''; $('#answer-char-count').textContent = '0 字'; }
     question.value = text;
     setQuestionContext(null);
@@ -627,12 +651,13 @@ const toast = createToast(escapeHtml);
    return !changed || window.confirm('当前岗位描述有未保存的修改，切换岗位后这些修改将丢失。确定切换吗？');
  }
 
- $('#question').addEventListener('input', () => { if(questionContext && $('#question').value !== questionContext.text) setQuestionContext(null); scheduleDraft(); });
+ $('#question').addEventListener('input', () => { clearPracticeHelp(); clearRecommendationChoice(); if(questionContext && $('#question').value !== questionContext.text) setQuestionContext(null); scheduleDraft(); });
  $('#answer').addEventListener('input', scheduleDraft);
  $('#clear-draft').addEventListener('click', () => {
    if (!$('#question').value && !$('#answer').value) return;
    if (!window.confirm('确定清空当前岗位的题目和回答草稿吗？')) return;
    $('#question').value = '';
+   clearPracticeHelp(); clearRecommendationChoice();
     setQuestionContext(null);
    $('#answer').value = '';
    $('#answer-char-count').textContent = '0 字';
@@ -1022,30 +1047,90 @@ const toast = createToast(escapeHtml);
    });
  }
 
- // Pick random question from library
+ // Optional AI help leaves the answer and assessment untouched.
+ $('#practice-help')?.addEventListener('click', async e => {
+   const button = e.target.closest('[data-practice-help]');
+   if (!button || button.disabled) return;
+   const modes = {hint:'AI 提示', breakdown:'AI 拆解', approach:'AI 参考思路'};
+   const mode = button.dataset.practiceHelp;
+   if (!Object.hasOwn(modes, mode)) return;
+   const question = $('#question').value.trim(), role = state.role || '';
+   const status = $('#practice-help-status'), result = $('#practice-help-result');
+   if (!question) { status.hidden = false; status.textContent = '请先填写练习问题，再选择帮助方式。'; $('#question').focus(); return; }
+   if (question.length > 2000) { status.hidden = false; status.textContent = '问题不能超过 2000 字，请缩短后再获取帮助。'; return; }
+   helpController?.abort();
+   const controller = new AbortController(), requestId = ++helpRequestId, revision = roleRevision;
+   helpController = controller;
+   const buttons = $$('#practice-help [data-practice-help]');
+   buttons.forEach(item => { item.disabled = true; });
+   status.hidden = false; status.textContent = '正在生成帮助…'; result.hidden = true;
+   try {
+     const data = await api('/api/practice/help', 'POST', {role,question,mode}, controller.signal);
+     if (requestId !== helpRequestId || revision !== roleRevision || state.role !== role || $('#question').value.trim() !== question) return;
+     $('#practice-help-label').textContent = modes[mode] + ' · 生成内容仅供参考';
+     $('#practice-help-content').textContent = data.guidance;
+     status.hidden = true; result.hidden = false;
+   } catch (err) {
+     if (requestId === helpRequestId && err.name !== 'AbortError') { status.hidden = false; status.textContent = '暂时无法获取帮助：' + err.message; }
+   } finally {
+     if (requestId === helpRequestId) { helpController = null; buttons.forEach(item => { item.disabled = false; }); }
+   }
+ });
+
+ // Recommend a different eligible question, or let the user choose an early repeat.
+ function useRecommendedQuestion(recommended) {
+   if (!loadPracticeQuestion(recommended.text)) return false;
+   clearRecommendationChoice();
+   setQuestionContext({text:recommended.text,questionRef:recommended.question_ref || null,reason:recommended.reason,reasonDetails:recommended.reasonDetails,topics:recommended.topics,sources:recommended.sources,sourceTitle:recommended.sourceTitle,sourceUrl:recommended.sourceUrl});
+   $('#answer')?.focus();
+   toast(`推荐原因：${recommended.reason} · 来源：${recommended.sourceTitle}`);
+   return true;
+ }
+
+ function showRecommendationChoice(recommended, role, revision, currentQuestion) {
+   pendingRecommendation = {recommended,role,revision,currentQuestion};
+   const notice = $('#recommendation-choice'), message = $('#recommendation-message'), action = $('#practice-suggested-anyway');
+   if (!recommended) message.textContent = '当前岗位题库还没有题目。可以先寻找面经，或到资料库添加题目。';
+   else if (recommended.availability === 'unknown') message.textContent = '上次练习时间未知，暂时无法判断是否到了建议复习时间。' + (recommended.reasonDetails || '');
+   else if (recommended.sameAsCurrent && recommended.availability === 'early') message.textContent = '当前没有其他合适的题目；这道题还没到建议复习时间。' + (recommended.reasonDetails || '');
+   else if (recommended.sameAsCurrent) message.textContent = '当前没有其他合适的题目，你可以继续练这道题。' + (recommended.reasonDetails || '');
+   else message.textContent = '当前没有到建议时间的题目。' + (recommended.reasonDetails || '');
+   if (recommended && !recommended.sameAsCurrent) {
+     const preview = Array.from(recommended.text || '');
+     message.textContent += ` 候选题：${preview.slice(0,80).join('')}${preview.length > 80 ? '…' : ''}`;
+   }
+   action.hidden = !recommended;
+   action.textContent = recommended?.sameAsCurrent ? '继续练这道' : '仍要练这题';
+   notice.hidden = false;
+ }
+
  const pickFromLibBtn = $('#pick-from-lib-btn');
  if (pickFromLibBtn) {
-    pickFromLibBtn.addEventListener('click', async () => {
-     if (!state.role) {
-       toast('请先在岗位设置中保存目标岗位，再从题库选题');
-       return;
-     }
-      const role=state.role;
-      let recommended;
-      try { ({question:recommended} = await api('/api/recommendation','POST',{role})); }
-      catch(err) { toast.error(err.message); return; }
-      if (state.role !== role) { toast('岗位已切换，请重新选择题目'); return; }
-      if (!recommended) {
-       toast('当前岗位暂无题目，可先添加面经题目或选择将面试问题加入题库');
-       return;
-     }
-      if (!loadPracticeQuestion(recommended.text)) return;
-      setQuestionContext({text:recommended.text,questionRef:recommended.question_ref || null,reason:recommended.reason,reasonDetails:recommended.reasonDetails,topics:recommended.topics,sources:recommended.sources,sourceTitle:recommended.sourceTitle,sourceUrl:recommended.sourceUrl});
-     const aInput = $('#answer');
-     if (aInput) aInput.focus();
-      toast(`推荐原因：${recommended.reason} · 来源：${recommended.sourceTitle}`);
+   pickFromLibBtn.addEventListener('click', async () => {
+     if (!state.role) { toast('请先在岗位设置中保存目标岗位，再从题库选题'); return; }
+     clearRecommendationChoice();
+     const role = state.role, revision = roleRevision, currentQuestion = $('#question').value, requestId = ++recommendationRequestId;
+     pickFromLibBtn.disabled = true;
+     try {
+       const {question:recommended} = await api('/api/recommendation','POST',{role,exclude_question:currentQuestion});
+       if (requestId !== recommendationRequestId || roleRevision !== revision || state.role !== role || $('#question').value !== currentQuestion) return;
+       if (!recommended || recommended.sameAsCurrent || !['new','due'].includes(recommended.availability)) {
+         showRecommendationChoice(recommended,role,revision,currentQuestion);
+       } else {
+         useRecommendedQuestion(recommended);
+       }
+     } catch(err) { if (requestId === recommendationRequestId) toast.error(err.message); }
+     finally { if (requestId === recommendationRequestId) pickFromLibBtn.disabled = false; }
    });
  }
+ $('#practice-suggested-anyway')?.addEventListener('click', () => {
+   const pending = pendingRecommendation;
+   if (!pending?.recommended) return;
+   if (state.role !== pending.role || roleRevision !== pending.revision || $('#question').value !== pending.currentQuestion) {
+     clearRecommendationChoice(); toast('岗位或题目已变化，请重新选择题目'); return;
+   }
+   useRecommendedQuestion(pending.recommended);
+ });
 
  // Answer character counter
  const answerInput = $('#answer');
@@ -1372,6 +1457,7 @@ const toast = createToast(escapeHtml);
         $('#answer-followup')?.addEventListener('click', () => {
           if(state.role!==submitted.role || $('#question').value!==submitted.question) { toast('当前题目已变化，请先完成当前练习'); return; }
           if($('#answer').value!==submitted.answer && $('#answer').value.trim() && !window.confirm('当前回答有新的修改，切换到追问会替换它。确定继续吗？')) return;
+          clearPracticeHelp(); clearRecommendationChoice();
           $('#question').value=result.follow_up; $('#answer').value=''; $('#answer-char-count').textContent='0 字';
           setQuestionContext({text:result.follow_up,parentId:result.id}); scheduleDraft(); $('#answer').focus();
         });

@@ -56,4 +56,29 @@ test('separates roles and handles absent or invalid practice dates conservativel
   assert.match(result.reasonDetails,/时间未知/);
   assert.equal(result.practiceCount,1);
   assert.equal(result.selfAssessment,'revisit');
+  assert.equal(result.availability,'unknown');
+});
+
+test('a recently practiced only question is offered as an early repeat, not a new question', () => {
+  const result=recommendFromHistory({role:'产品',candidates:[question('题一')],attempts:[attempt('题一','2026-11-10T11:30:00Z','revisit')],excludeText:'题一',now});
+  assert.equal(result.text,'题一');
+  assert.equal(result.availability,'early');
+  assert.equal(result.sameAsCurrent,true);
+  assert.match(result.reasonDetails,/建议间隔 1 天/);
+});
+
+test('a different eligible question is chosen before repeating the current one', () => {
+  const candidates=[question('当前题'),question('另一题')];
+  const records=[attempt('当前题','2026-11-01T12:00:00Z','revisit')];
+  const result=recommendFromHistory({role:'产品',candidates,attempts:records,excludeText:'当前题',now});
+  assert.equal(result.text,'另一题');
+  assert.equal(result.availability,'new');
+  assert.equal(result.sameAsCurrent,false);
+});
+
+test('when all candidates are early, the suggestion remains explicitly early', () => {
+  const result=recommendFromHistory({role:'产品',candidates:[question('题一'),question('题二')],attempts:[attempt('题一','2026-11-10T11:00:00Z','comfortable','产品','1'),attempt('题二','2026-11-10T10:00:00Z','revisit','产品','2')],excludeText:'题一',now});
+  assert.equal(result.text,'题一');
+  assert.equal(result.availability,'early');
+  assert.equal(result.sameAsCurrent,true);
 });

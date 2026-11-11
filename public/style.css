@@ -2136,7 +2136,21 @@ body { background: var(--lens-bg); }
 .practice-question-action { min-height: 36px; padding: 6px 11px; color: var(--lens-primary); background: #f4f7ff; border: 1px solid #dbe5f7; border-radius: 8px; font-size: 12px; font-weight: 600; transition: background-color .18s ease, border-color .18s ease, transform .18s ease; }
 .practice-question-action:hover { background: #eaf0ff; border-color: #acc0ed; }
 .practice-question-action:active { transform: scale(.98); }
+.practice-question-action:disabled { opacity: .55; cursor: wait; transform: none; }
 .practice-question-action span { margin-right: 4px; font-size: 14px; }
+.practice-help, .recommendation-choice { padding: 14px; border: 1px solid var(--lens-border); border-radius: 12px; background: #f8faff; }
+.practice-help-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 10px; color: var(--lens-text-primary); }
+.practice-help-heading span, .practice-help-privacy { color: var(--lens-text-secondary); font-size: 12px; line-height: 1.6; }
+.practice-help-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.practice-help-actions .practice-question-action { min-height: 44px; }
+.practice-help-privacy, .practice-help-status { margin: 10px 0 0; }
+.practice-help-status, .recommendation-choice p { color: var(--lens-text-secondary); font-size: 13px; line-height: 1.6; }
+.practice-help-result { margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--lens-surface-solid); color: var(--lens-text-primary); }
+.practice-help-result strong { color: var(--lens-primary); font-size: 12px; }
+.practice-help-result p { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+.practice-help-status[hidden], .practice-help-result[hidden], .recommendation-choice[hidden], #practice-suggested-anyway[hidden] { display: none; }
+.recommendation-choice { margin-top: 10px; }
+.recommendation-choice p { margin: 0; }
 .practice-compose textarea { width: 100%; min-height: 100px; padding: 13px 14px; border: 1px solid #aeb9c8; border-radius: 10px; background: #fcfdff; line-height: 1.7; resize: vertical; }
 .practice-compose #answer { min-height: 172px; }
 .practice-compose .char-count { color: var(--lens-text-muted); font-size: 12px; }

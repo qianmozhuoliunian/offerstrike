@@ -61,3 +61,10 @@ export function parseReview(content) {
   if (!result || typeof result.feedback !== 'string' || !result.feedback.trim() || result.feedback.length > 10000 || typeof result.follow_up !== 'string' || result.follow_up.length > 2000) throw Error('AI 点评格式无效，请重试');
   return {feedback:result.feedback.trim(), follow_up:result.follow_up.trim()};
 }
+
+export function parsePracticeHelp(content) {
+  let result;
+  try { result = JSON.parse(content); } catch { throw Error('AI 帮助格式无效，请重试'); }
+  if (!result || typeof result.guidance !== 'string' || !result.guidance.trim() || result.guidance.length > 6000) throw Error('AI 帮助内容不可用，请重试');
+  return result.guidance.trim();
+}

@@ -95,8 +95,8 @@ async function api(req,res,path) {
     const results=(Array.isArray(data.results)?data.results:[]).map(r=>{const url=String(r.url||''), site=searchSource(url); return {title:String(r.title||''),url,snippet:String(r.content||''),date:searchPublishedDate(r.published_date),site,platform:names[site]||''};}).filter(r=>r.site && (source==='all' || r.site===source));
     const visible=query.start_date ? filterByDate(results,query.start_date).filter(r => r.date <= new Date().toISOString().slice(0,10)) : results;
     const relevant=filterSearchRelevance(role,visible);
-    const notice=(query.start_date?'已隐藏日期未知或不在范围内的结果；可尝试不限时间。日期由搜索服务提供，需核实原帖。':'搜索结果待核实；发布时间以原帖为准。') + (relevant.filtered ? ` 已隐藏 ${relevant.filtered} 条标题明显偏向 Java 或后端的结果。` : '');
-    return json(res,200,{results:relevant.results,notice});
+    const notice=(query.start_date?'已隐藏日期未知或不在范围内的结果；可尝试不限时间。日期由搜索服务提供，需核实原帖。':'日期由搜索服务提供，需核实原帖。') + ' 已按标题中的岗位关键词和面试线索初筛，相关性仍需核实。' + (relevant.filtered ? ` 已隐藏 ${relevant.filtered} 条标题明显偏向 Java 或后端的结果。` : '');
+    return json(res,200,{results:relevant.results,unverified_results:relevant.unverified,notice});
   }
   if(path==='/api/practice/help' && req.method==='POST') {
     if(!process.env.AI_API_KEY || !process.env.AI_MODEL) return json(res,503,{error:'尚未配置 AI 服务，暂时无法获取帮助。'});

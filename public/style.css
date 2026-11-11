@@ -924,6 +924,27 @@
    margin-top: 14px;
  }
 
+ .search-unverified {
+   border: 1px solid var(--lens-border);
+   border-radius: var(--radius-lg);
+   padding: 0 16px 4px;
+   background: #f8faff;
+ }
+ .search-unverified summary {
+   cursor: pointer;
+   padding: 14px 0;
+   color: var(--lens-primary);
+   font-weight: 600;
+   line-height: 1.5;
+ }
+ .search-unverified > p {
+   color: var(--lens-text-secondary);
+   font-size: 13px;
+   line-height: 1.6;
+   margin: 0 0 12px;
+ }
+ .search-unverified > .result-item { margin: 0 0 12px; }
+
  .result-item {
    background: #ffffff;
    border: 1px solid var(--apple-card-border);

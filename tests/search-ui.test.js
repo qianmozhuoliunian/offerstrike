@@ -33,7 +33,7 @@ test('search results and saved sources remain bound to their original role', asy
   h.calls[0].resolve({notice:'需核实',results:[{title:'来源',url:'https://example.org',date:''}]});
   await pending;
   assert.match(h.status.textContent,/岗位甲/);
-  assert.match(h.status.textContent,/找到 1 条结果/);
+  assert.match(h.status.textContent,/找到 1 条可能相关的结果/);
   assert.match(h.results.innerHTML,/来源/);
   assert.match(h.results.innerHTML,/收藏来源/);
   const saveButton={dataset:{save:'0'},disabled:false};
@@ -57,8 +57,37 @@ test('search errors and empty results are shown in the page', async () => {
   const empty=h.handlers['form:submit']({preventDefault(){}});
   h.calls[1].resolve({notice:'请核实',results:[]});
   await empty;
-  assert.match(h.status.textContent,/找到 0 条结果/);
-  assert.match(h.results.innerHTML,/未找到符合条件/);
+  assert.match(h.status.textContent,/找到 0 条可能相关的结果/);
+  assert.match(h.results.innerHTML,/暂时没有找到可能相关的面试内容/);
+});
+
+test('unverified results are folded separately and their save action uses the right item', async () => {
+  const h=harness();
+  const pending=h.handlers['form:submit']({preventDefault(){}});
+  h.calls[0].resolve({
+    results:[{title:'岗位甲面经',url:'https://example.org/match',date:'2026-01-01',role_match:'title_keyword'}],
+    unverified_results:[{title:'无关新闻',url:'https://example.org/unknown',role_match:'unknown'}]
+  });
+  await pending;
+  assert.match(h.results.innerHTML,/<details class="search-unverified">/);
+  assert.match(h.results.innerHTML,/1 条相关性未确认（可能无关）/);
+  assert.match(h.results.innerHTML,/标题含岗位关键词/);
+  assert.match(h.results.innerHTML,/日期参考 2026-01-01/);
+  assert.doesNotMatch(h.results.innerHTML,/岗位匹配|发布于/);
+  const saveButton={dataset:{save:'1'},disabled:false,textContent:'',closest:()=>null};
+  const saving=h.handlers['results:click']({target:targetFor('[data-save]',saveButton)});
+  assert.equal(h.calls[1].data.url,'https://example.org/unknown');
+  h.calls[1].resolve({id:'saved'}); await saving;
+});
+
+test('when only unverified items exist, the empty state stays visible and the items stay folded', async () => {
+  const h=harness(); const pending=h.handlers['form:submit']({preventDefault(){}});
+  h.calls[0].resolve({results:[],unverified_results:[{title:'其他话题',url:'https://example.org',role_match:'unknown'}]});
+  await pending;
+  assert.match(h.status.textContent,/找到 0 条可能相关的结果/);
+  assert.match(h.results.innerHTML,/暂时没有找到可能相关的面试内容/);
+  assert.match(h.results.innerHTML,/<details class="search-unverified">/);
+  assert.match(h.results.innerHTML,/可能无关/);
 });
 
 test('long results are readable, saved sources are marked, and changed filters are explained', async () => {

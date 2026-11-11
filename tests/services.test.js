@@ -4,14 +4,17 @@ import { searchRequest, searchSource, searchPublishedDate, parseRequirements, pa
 import { isAllowedRequest } from '../src/request-security.js';
 import { filterSearchRelevance } from '../src/search-relevance.js';
 
-test('frontend results omit clear backend titles without excluding mixed and uncertain titles', () => {
+test('frontend results omit clear backend titles and keep uncertain titles separately', () => {
   const titles=['【面经分享】2026 Java 后端开发面试真题汇总','Java工程师精选面经合集','前端 JavaScript 面试','前端与 Java 后端面经','京东校招面经','JavaScript 面试'];
   const items=titles.map(title=>({title}));
   const result=filterSearchRelevance('前端开发工程师',items);
-  assert.deepEqual(result.results.map(x=>x.title),titles.slice(2));
+  assert.deepEqual(result.results.map(x=>x.title),titles.slice(2,4));
   assert.equal(result.filtered,2);
-  assert.equal(result.results[2].role_match,'unknown');
-  assert.deepEqual(filterSearchRelevance('Java 后端开发',items).results,items);
+  assert.deepEqual(result.unverified.map(x=>x.title),titles.slice(4));
+  assert.equal(result.unverified[0].role_match,'unknown');
+  const java=filterSearchRelevance('Java 后端开发',items);
+  assert.equal(java.filtered,0);
+  assert.ok(java.results.some(item=>item.title===titles[0]));
 });
 
 test('search normalizes provider dates while leaving unrecognizable dates unknown', () => {

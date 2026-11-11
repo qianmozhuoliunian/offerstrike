@@ -1235,12 +1235,12 @@ const toast = createToast(escapeHtml);
          source
         }, controller.signal);
         if (requestId !== searchRequestId || state.role !== role) return;
-       const statusText = `「${role}」找到 ${data.results?.length || 0} 条结果 · ${company || '不限公司'} · ${rangeLabel} · ${sourceLabel}。${data.notice || ''}`;
-       searchBatch = {role, results:data.results || [], conditions:{company,range,source}, statusText};
+       const matched = data.results || [], unverified = data.unverified_results || [];
+       const statusText = `「${role}」找到 ${matched.length} 条可能相关的结果 · ${company || '不限公司'} · ${rangeLabel} · ${sourceLabel}。${data.notice || ''}`;
+       searchBatch = {role, results:[...matched,...unverified], conditions:{company,range,source}, statusText};
        updateSearchConditionsNotice();
-       if (data.results && data.results.length) {
-         if (resultsEl) {
-           resultsEl.innerHTML = data.results.map((r, i) => {
+       if (resultsEl) {
+           const renderResult = (r, i) => {
              const saved = (state.sources || []).find(s => s.role === role && s.url === r.url);
              r.savedSourceId = saved?.id || '';
              const platformClass = r.platform === '牛客' ? 'platform-nowcoder' : r.platform === '掘金' ? 'platform-juejin' : r.platform === '知乎' ? 'platform-zhihu' : 'gray';
@@ -1248,8 +1248,8 @@ const toast = createToast(escapeHtml);
              <article class="result-item">
                <div class="result-meta">
                  <span class="apple-pill ${platformClass}">${escapeHtml(r.platform || '外部面经')}</span>
-                 ${r.role_match === 'unknown' ? '<span class="apple-pill match-unknown">岗位待核实</span>' : (r.role_match === 'title_match' ? '<span class="apple-pill match-ok">岗位匹配</span>' : '')}
-                 <span class="apple-pill date-pill">${r.date ? `发布于 ${escapeHtml(r.date)}` : '发布时间以原帖为准'}</span>
+                 ${r.role_match === 'unknown' ? '<span class="apple-pill match-unknown">相关性待核实</span>' : (r.role_match === 'title_keyword' ? '<span class="apple-pill match-ok">标题含岗位关键词</span>' : '')}
+                 <span class="apple-pill date-pill">${r.date ? `日期参考 ${escapeHtml(r.date)}` : '发布时间以原帖为准'}</span>
                </div>
                <h4 class="result-title">
                  <a href="${escapeHtml(r.url)}" target="_blank" rel="noopener noreferrer">
@@ -1269,16 +1269,18 @@ const toast = createToast(escapeHtml);
                  </a>
                </div>
              </article>
-           `; }).join('');
-         }
-       } else {
-         if (resultsEl) {
-           resultsEl.innerHTML = `
+           `; };
+           const matchesMarkup = matched.length ? matched.map(renderResult).join('') : `
              <div class="apple-empty-state" style="padding: 28px;">
-               <div class="empty-state-desc">未找到符合条件的面经，建议尝试放宽时间范围或精简公司关键词。</div>
-             </div>
-           `;
-         }
+               <div class="empty-state-desc">暂时没有找到可能相关的面试内容。请检查目标岗位，或调整时间范围和公司关键词。</div>
+             </div>`;
+           const unverifiedMarkup = unverified.length ? `
+             <details class="search-unverified">
+               <summary>另有 ${unverified.length} 条相关性未确认（可能无关）</summary>
+               <p>以下标题缺少岗位关键词或面试线索，可能包含相关结果，也可能完全无关；请打开原帖核实。</p>
+               ${unverified.map((result, index) => renderResult(result, matched.length + index)).join('')}
+             </details>` : '';
+           resultsEl.innerHTML = matchesMarkup + unverifiedMarkup;
        }
      } catch (err) {
         if (requestId === searchRequestId && err.name !== 'AbortError' && statusBanner) {

@@ -183,6 +183,7 @@ const files = {
   '/': [new URL('./public/index.html', import.meta.url), 'text/html'],
   '/app.js': [new URL('./public/app.js', import.meta.url), 'text/javascript'],
   '/ui/toast.js': [new URL('./public/ui/toast.js', import.meta.url), 'text/javascript'],
+  '/assets/interview-study-illustration.png': [new URL('./public/assets/interview-study-illustration.png', import.meta.url), 'image/png'],
   '/style.css': [new URL('./public/style.css', import.meta.url), 'text/css']
 };
 const server = http.createServer(async (req, res) => {

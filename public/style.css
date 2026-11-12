@@ -2790,10 +2790,48 @@ body { background: var(--lens-bg); }
 }
 .workspace-spark { position: absolute; top: -.2em; right: -.35em; width: .38em; height: .38em; color: #315cc4; }
 .workspace-intro p { position: relative; z-index: 1; margin-top: 15px; color: #536681; font-size: 14px; line-height: 1.7; }
-.workspace-illustration { position: absolute; right: 3%; top: 2%; width: 170px; color: #8daac8; opacity: .7; pointer-events: none; z-index: -1; }
 @media (max-width: 640px) {
   .workspace-intro { min-height: 220px; padding: 25px 24px; }
   .workspace-intro h1 { font-size: clamp(32px, 9vw, 42px); }
   .workspace-intro p { max-width: 25em; }
-  .workspace-illustration { width: 130px; right: -12px; opacity: .45; }
+}
+
+/* Warm, quiet surfaces keep the workbench welcoming and the forms readable. */
+body {
+  background: radial-gradient(ellipse at 82% 3%, #f8f1e6 0, transparent 42%),
+    radial-gradient(ellipse at 20% 90%, #edf3f2 0, transparent 42%), #f5f7fa;
+  background-attachment: fixed;
+}
+.workspace-intro {
+  min-height: 260px;
+  background: linear-gradient(115deg, #f9f8f1 0%, #edf4f2 100%);
+  border-color: #e7e9dc;
+}
+.workspace-art {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 52%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  pointer-events: none;
+  z-index: -1;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 34%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 34%);
+}
+.workspace-summary { background: #fffefa; border-color: #e9e8df; box-shadow: 0 9px 28px rgba(76, 83, 78, .06); }
+.feature-card[data-tab="practice"], .feature-card[data-tab="library"] { background: #fffefa; box-shadow: 0 8px 24px rgba(76, 83, 78, .045); }
+@media (max-width: 640px) {
+  .workspace-intro { padding-bottom: 22px; }
+  .workspace-art {
+    position: relative;
+    inset: auto;
+    z-index: 0;
+    width: 100%;
+    height: 130px;
+    margin-top: 18px;
+    border-radius: 10px;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
 }

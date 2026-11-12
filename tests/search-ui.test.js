@@ -15,16 +15,38 @@ function harness() {
   const results = {innerHTML:'',replaceChildren(){this.innerHTML='';},addEventListener(type,fn){handlers['results:'+type]=fn;}};
   const form = {addEventListener(type,fn){handlers['form:'+type]=fn;}};
   const status = {className:'',textContent:'',innerHTML:''};
-  const elements = {'#search-form':form,'#search-btn':button,'#search-status':status,'#results':results,'#company':{value:''},'#range':{value:'year'}};
+  const elements = {'#search-form':form,'#search-btn':button,'#search-status':status,'#results':results,'#company':{value:''},'#range':{value:'year'},'#search-ai-relevance':{checked:false}};
   const api = (path,method,data,signal) => new Promise((resolve,reject) => calls.push({path,method,data,signal,resolve,reject}));
   const toast = {success:message=>messages.push(message),error:message=>messages.push(message)};
   const openSourceQuestionEditor=async (id,role)=>opened.push({id,role});
   const context=vm.createContext({AbortController,api,toast,openSourceQuestionEditor,escapeHtml:s=>String(s ?? ''),$:s=>elements[s],refresh:async()=>{},window:{}});
   vm.runInContext(`let state={role:'岗位甲'}; let searchBatch=null; let searchRequestId=0; let searchController=null; let searchButtonMarkup=''; let searchNeedsRoleCheck=false; ${invalidation}\n${searchHandlers}`,context);
-  return {context,handlers,calls,messages,button,status,results,opened};
+  return {context,handlers,calls,messages,button,status,results,opened,elements};
 }
 
 const targetFor=(selector,button)=>({closest:query=>query===selector ? button : null});
+
+test('search displays AI evidence, uncertain company and partial failure without claiming completion', async () => {
+  const h=harness();
+  h.elements['#search-ai-relevance'].checked=true;
+  const pending=h.handlers['form:submit']({preventDefault(){}});
+  assert.equal(h.calls[0].data.ai_relevance,true);
+  h.calls[0].resolve({partial_failure:true,notice:'部分检索失败，结果不完整，可重试。',results:[],unverified_results:[{title:'产品经理面经',url:'https://example.org',role_match:'title_keyword',company_match:'unknown',ai_relevance:'uncertain',ai_evidence:null}]});
+  await pending;
+  assert.match(h.status.textContent,/部分检索失败/);
+  assert.match(h.results.innerHTML,/部分检索失败/);
+  assert.match(h.results.innerHTML,/公司待核实/);
+  assert.match(h.results.innerHTML,/AI 无法判断/);
+  const again=h.handlers['form:submit']({preventDefault(){}});
+  h.calls[1].resolve({results:[{title:'产品经理面经',url:'https://example.org',ai_relevance:'related',ai_evidence:{role_evidence:'产品经理',interview_evidence:'面经'}}]});
+  await again;
+  assert.match(h.results.innerHTML,/AI 初筛可能相关/);
+  assert.match(h.results.innerHTML,/产品经理；面经/);
+  assert.match(h.results.innerHTML,/不代表原帖真实性/);
+  h.elements['#search-ai-relevance'].checked=false;
+  vm.runInContext('updateSearchConditionsNotice()',h.context);
+  assert.match(h.status.textContent,/搜索条件已更改/);
+});
 
 test('an old unverified role is directed to role settings before any search request', async () => {
   const h=harness();

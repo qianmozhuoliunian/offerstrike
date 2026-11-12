@@ -16,7 +16,10 @@ export function initializeWorkspace(db) {
     CREATE TABLE IF NOT EXISTS attempt_details (attempt_id TEXT PRIMARY KEY, follow_up TEXT NOT NULL DEFAULT '', parent_attempt_id TEXT NOT NULL DEFAULT '');
     CREATE TABLE IF NOT EXISTS draft_contexts (role TEXT PRIMARY KEY, parent_attempt_id TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS attempt_question_links (attempt_id TEXT PRIMARY KEY, kind TEXT NOT NULL, question_id TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS draft_question_links (role TEXT PRIMARY KEY, kind TEXT NOT NULL, question_id TEXT NOT NULL);`);
+    CREATE TABLE IF NOT EXISTS draft_question_links (role TEXT PRIMARY KEY, kind TEXT NOT NULL, question_id TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS dialogue_origins (attempt_id TEXT PRIMARY KEY, origin TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS dialogue_summaries (attempt_id TEXT PRIMARY KEY, summary TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS dialogue_requests (request_id TEXT PRIMARY KEY, attempt_id TEXT NOT NULL);`);
 }
 
 function bounded(value, max, name) {
@@ -96,7 +99,7 @@ export function setInterviewDate(db, sourceId, value) {
   return {interview_date:date};
 }
 export function exportData(db) {
-  return {version:1, exported_at:new Date().toISOString(), settings:db.prepare("SELECT key,value FROM settings WHERE key='role'").all(), profiles:db.prepare('SELECT role,jd,confirmed_requirements FROM job_profiles').all(), sources:listSources(db), attempts:db.prepare('SELECT * FROM attempts ORDER BY created DESC').all(), drafts:db.prepare('SELECT role,question,answer,updated FROM drafts').all(), debriefs:db.prepare("SELECT d.*,COALESCE(t.topic,'') AS topic FROM debriefs d LEFT JOIN question_topics t ON t.kind='debrief' AND t.question_id=d.id ORDER BY d.created DESC").all(), assessments:db.prepare('SELECT attempt_id,rating FROM attempt_assessments').all(), attempt_details:db.prepare('SELECT * FROM attempt_details').all(), draft_contexts:db.prepare('SELECT * FROM draft_contexts').all(), attempt_question_links:db.prepare('SELECT * FROM attempt_question_links').all(), draft_question_links:db.prepare('SELECT * FROM draft_question_links').all()};
+  return {version:1, exported_at:new Date().toISOString(), settings:db.prepare("SELECT key,value FROM settings WHERE key='role'").all(), profiles:db.prepare('SELECT role,jd,confirmed_requirements FROM job_profiles').all(), sources:listSources(db), attempts:db.prepare('SELECT * FROM attempts ORDER BY created DESC').all(), drafts:db.prepare('SELECT role,question,answer,updated FROM drafts').all(), debriefs:db.prepare("SELECT d.*,COALESCE(t.topic,'') AS topic FROM debriefs d LEFT JOIN question_topics t ON t.kind='debrief' AND t.question_id=d.id ORDER BY d.created DESC").all(), assessments:db.prepare('SELECT attempt_id,rating FROM attempt_assessments').all(), attempt_details:db.prepare('SELECT * FROM attempt_details').all(), draft_contexts:db.prepare('SELECT * FROM draft_contexts').all(), attempt_question_links:db.prepare('SELECT * FROM attempt_question_links').all(), draft_question_links:db.prepare('SELECT * FROM draft_question_links').all(), dialogue_origins:db.prepare('SELECT * FROM dialogue_origins').all(), dialogue_summaries:db.prepare('SELECT * FROM dialogue_summaries').all(), dialogue_requests:db.prepare('SELECT * FROM dialogue_requests').all()};
 }
 
 export function setAssessment(db, id, rating) {
@@ -107,10 +110,11 @@ export function setAssessment(db, id, rating) {
   return {rating};
 }
 
-export function recommendQuestion(db, role, excludeText = '') {
+export function recommendQuestion(db, role, excludeText = '', sourcePreference = '') {
   role = validRole(role);
-  const sources=listSources(db).filter(s=>s.role===role).flatMap(s=>s.questions.map(q=>({role,text:q.text,question_ref:{kind:'source',id:q.id},questionCreated:q.created,topic:q.topic,sourceId:s.id,sourceTitle:s.title,sourceUrl:s.url,sourceDate:s.date,sourceType:s.type,interviewDate:s.interview_date})));
-  const personal=db.prepare("SELECT d.id,d.question,d.created,COALESCE(t.topic,'') AS topic FROM debriefs d LEFT JOIN question_topics t ON t.kind='debrief' AND t.question_id=d.id WHERE d.role=? AND d.include_in_library=1").all(role).map(d=>({role,text:d.question,question_ref:{kind:'debrief',id:d.id},questionCreated:d.created,topic:d.topic,sourceId:'debrief:'+d.id,sourceTitle:'个人面试记录',sourceType:'个人面试记录'}));
+  if (!['','self_reported'].includes(sourcePreference)) throw Error('题目来源筛选无效');
+  const sources=listSources(db).filter(s=>s.role===role && (sourcePreference !== 'self_reported' || s.type === '真实面经（自述）')).flatMap(s=>s.questions.map(q=>({role,text:q.text,question_ref:{kind:'source',id:q.id},questionCreated:q.created,topic:q.topic,sourceId:s.id,sourceTitle:s.title,sourceUrl:s.url,sourceDate:s.date,sourceType:s.type,interviewDate:s.interview_date})));
+  const personal=sourcePreference === 'self_reported' ? [] : db.prepare("SELECT d.id,d.question,d.created,COALESCE(t.topic,'') AS topic FROM debriefs d LEFT JOIN question_topics t ON t.kind='debrief' AND t.question_id=d.id WHERE d.role=? AND d.include_in_library=1").all(role).map(d=>({role,text:d.question,question_ref:{kind:'debrief',id:d.id},questionCreated:d.created,topic:d.topic,sourceId:'debrief:'+d.id,sourceTitle:'个人面试记录',sourceType:'个人面试记录'}));
   const attempts=db.prepare('SELECT a.id,a.role,a.question,a.created,aa.rating,l.kind AS refKind,l.question_id AS refId FROM attempts a LEFT JOIN attempt_assessments aa ON aa.attempt_id=a.id LEFT JOIN attempt_question_links l ON l.attempt_id=a.id WHERE a.role=?').all(role);
   return recommendFromHistory({role,candidates:[...sources,...personal],attempts,excludeText});
 }

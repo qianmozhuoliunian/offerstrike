@@ -1,4 +1,6 @@
 const originalFetch = globalThis.fetch;
+const { appendFileSync } = await import('node:fs');
+const { join } = await import('node:path');
 globalThis.fetch = async (url, options) => {
   if (String(url)==='https://mock-role.test/v1/chat/completions') {
     const request=JSON.parse(options.body);
@@ -6,8 +8,21 @@ globalThis.fetch = async (url, options) => {
     const status=role==='科比' ? 'invalid' : role==='AI' ? 'uncertain' : 'valid';
     return Response.json({choices:[{message:{content:JSON.stringify({status})}}]});
   }
+  if (String(url)==='https://mock-search-ai.test/v1/chat/completions') {
+    const request=JSON.parse(options.body);
+    const system=request.messages[0].content;
+    if (system.includes('判断输入能否表示求职者')) return Response.json({choices:[{message:{content:JSON.stringify({status:'valid'})}}]});
+    const input=JSON.parse(request.messages.at(-1).content);
+    appendFileSync(join(process.cwd(),'search-ai-requests.jsonl'),JSON.stringify(input)+'\n');
+    if (input.company==='AI失败') return new Response('',{status:503});
+    const items=input.candidates.map(candidate=>candidate.title.includes('面经') ? {index:candidate.index,status:'related',role_evidence:'产品',interview_evidence:'面经'} : {index:candidate.index,status:'uncertain'});
+    return Response.json({choices:[{message:{content:JSON.stringify({items})}}]});
+  }
   if (String(url) !== 'https://api.tavily.com/search') return originalFetch(url, options);
-  const query = JSON.parse(options.body).query;
+  const request=JSON.parse(options.body);
+  appendFileSync(join(process.cwd(),'search-provider-requests.jsonl'),JSON.stringify(request)+'\n');
+  const query = request.query;
+  if (query.includes('部分失败公司') && query.includes('面试经验')) return new Response('',{status:503});
   const today = new Date().toISOString().slice(0, 10);
   const results = query.startsWith('科比') ? [
     {title:'长鑫科技 AI面试，求经验分享', url:'https://www.nowcoder.com/discuss/1', content:'硬件芯片岗位面试。', published_date:today},

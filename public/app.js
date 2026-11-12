@@ -34,6 +34,11 @@ import { createToast } from './ui/toast.js';
  let helpController = null;
  let recommendationRequestId = 0;
  let pendingRecommendation = null;
+ let dialogue = {role:'', turns:[], summary:'', origin:'', generation:null};
+ let dialogueRevision = 0;
+ let dialogueBusy = false;
+ let dialogueRequest = null;
+ let practiceAutopickRole = null;
  const noteDrafts = new Map();
  const topicDrafts = new Map();
  const questionDrafts = new Map();
@@ -47,16 +52,6 @@ import { createToast } from './ui/toast.js';
    practice: 'AI 复习追问',
    library: '资料库',
    settings: '偏好与状态'
- };
-
- const sampleQuestions = {
-   '产品经理': '如何评估一个新功能上线的成败？请结合指标体系、北极星指标与业务归因进行拆解。',
-   'Java 后端开发': '高并发场景下，如何保证分布式订单状态流转的幂等性与最终一致性？请说明核心技术选型。',
-   '前端开发工程师': '请结合真实项目阐述前端性能优化方案：包含网络传输、关键渲染路径、长任务卡顿治理与核心 Web Vitals 监控。',
-   'AI 算法/应用工程师': '在构建生产级 RAG 知识库系统时，如何解决多路召回排序不精准与大模型事实幻觉问题？',
-   '用户增长运营': '一个新活动的触达转化率极高但次留很低，你会如何通过漏斗分析与分群定位问题并制定改善策略？',
-   '项目经理 (PMO)': '当项目关键路径上的核心交付物面临严重逾期风险时，你如何做范围、资源与进度的取舍并管理干系人预期？',
-   '默认': '请介绍你在过去最具有挑战性的一个项目：遇到的核心瓶颈是什么，你是如何权衡并解决的？'
  };
 
  const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({
@@ -109,6 +104,7 @@ const toast = createToast(escapeHtml);
    }
 
    window.scrollTo({ top: 0, behavior: 'instant' });
+   if (tabId === 'practice') setTimeout(maybeAutoSelectPractice, 0);
  }
 
  window.addEventListener('hashchange', () => {
@@ -189,10 +185,6 @@ const toast = createToast(escapeHtml);
  /* ==========================================================================
     State Rendering
     ========================================================================== */
-
- function getSuggestedQuestion(role) {
-   return sampleQuestions[role] || sampleQuestions['默认'];
- }
 
  function render() {
    // Form inputs & Topbar badges
@@ -512,10 +504,12 @@ const toast = createToast(escapeHtml);
 
  async function refresh() {
     const nextState = await api('/api/state');
-    if (state.role !== nextState.role) { roleRevision++; invalidateSearchForRoleChange(); clearPracticeHelp(); clearRecommendationChoice(); }
+    const changedRole = state.role !== nextState.role;
+    if (changedRole) { roleRevision++; invalidateSearchForRoleChange(); clearPracticeHelp(); clearRecommendationChoice(); resetDialogue(false); }
     else if (state.roleValidation !== nextState.roleValidation) invalidateSearchForRoleChange();
     state = nextState;
    render();
+   if (changedRole) restoreDialogue(nextState.role, nextState.draft).then(maybeAutoSelectPractice).catch(() => {});
  }
 
  function invalidateSearchForRoleChange() {
@@ -565,7 +559,8 @@ const toast = createToast(escapeHtml);
    const el=$('#question-context'); if(!el) return;
    el.replaceChildren(); el.hidden=!questionContext;
    if(!questionContext) return;
-   if(questionContext.parentId) { el.textContent='正在回答追问；点评会包含上一轮问题和回答。'; return; }
+   if(questionContext.origin === 'ai') { el.textContent='AI 生成题 · 非真实面经，仅供练习。'; return; }
+   if(questionContext.parentId) { el.textContent='正在回答 AI 追问；点评会发送本题之前的完整对话。'; return; }
    if(questionContext.reason) { const reason=document.createElement('div'); reason.textContent=`推荐原因：${questionContext.reason}${questionContext.reasonDetails ? ' · '+questionContext.reasonDetails : ''}`; el.append(reason); }
    if(questionContext.topics?.length) { const topics=document.createElement('div'); topics.textContent='主题：'+questionContext.topics.join('、'); el.append(topics); }
    const sources=questionContext.sources?.length ? questionContext.sources : [{title:questionContext.sourceTitle || '来源未知',url:questionContext.sourceUrl}];
@@ -602,6 +597,7 @@ const toast = createToast(escapeHtml);
    const question = $('#question');
    const answer = $('#answer');
    if (question.value !== text && answer.value.trim() && !window.confirm('切换题目会替换当前回答，确定继续吗？')) return false;
+   if (question.value !== text && typeof resetDialogue === 'function') resetDialogue();
    if (question.value !== text) { clearPracticeHelp(); clearRecommendationChoice(); }
    if (question.value !== text) { answer.value = ''; $('#answer-char-count').textContent = '0 字'; }
     question.value = text;
@@ -665,6 +661,7 @@ const toast = createToast(escapeHtml);
  $('#clear-draft').addEventListener('click', () => {
    if (!$('#question').value && !$('#answer').value) return;
    if (!window.confirm('确定清空当前岗位的题目和回答草稿吗？')) return;
+   resetDialogue();
    $('#question').value = '';
    clearPracticeHelp(); clearRecommendationChoice();
     setQuestionContext(null);
@@ -978,6 +975,7 @@ const toast = createToast(escapeHtml);
 
  $('#attempt-role-scope').addEventListener('change', renderAttempts);
 
+
  // Library Category Filter Pills
  $$('.filter-pill').forEach(pill => {
    pill.addEventListener('click', () => {
@@ -1053,18 +1051,6 @@ const toast = createToast(escapeHtml);
    toast('已载入个人面试记录中的问题');
  });
 
- // Sample Question Button in Practice Tab
- const sampleQBtn = $('#sample-q-btn');
- if (sampleQBtn) {
-   sampleQBtn.addEventListener('click', () => {
-     const q = getSuggestedQuestion(state.role);
-     if (!loadPracticeQuestion(q)) return;
-     const aInput = $('#answer');
-     if (aInput) aInput.focus();
-     toast('已填入岗位示例题');
-   });
- }
-
  // Optional AI help leaves the answer and assessment untouched.
  $('#practice-help')?.addEventListener('click', async e => {
    const button = e.target.closest('[data-practice-help]');
@@ -1108,7 +1094,7 @@ const toast = createToast(escapeHtml);
  function showRecommendationChoice(recommended, role, revision, currentQuestion) {
    pendingRecommendation = {recommended,role,revision,currentQuestion};
    const notice = $('#recommendation-choice'), message = $('#recommendation-message'), action = $('#practice-suggested-anyway');
-   if (!recommended) message.textContent = '当前岗位题库还没有题目。可以先寻找面经，或到资料库添加题目。';
+   if (!recommended) message.textContent = '当前岗位的真实面经题库还没有题目。可以先寻找面经，或选择是否生成一道 AI 题。';
    else if (recommended.availability === 'unknown') message.textContent = '上次练习时间未知，暂时无法判断是否到了建议复习时间。' + (recommended.reasonDetails || '');
    else if (recommended.sameAsCurrent && recommended.availability === 'early') message.textContent = '当前没有其他合适的题目；这道题还没到建议复习时间。' + (recommended.reasonDetails || '');
    else if (recommended.sameAsCurrent) message.textContent = '当前没有其他合适的题目，你可以继续练这道题。' + (recommended.reasonDetails || '');
@@ -1130,7 +1116,7 @@ const toast = createToast(escapeHtml);
      const role = state.role, revision = roleRevision, currentQuestion = $('#question').value, requestId = ++recommendationRequestId;
      pickFromLibBtn.disabled = true;
      try {
-       const {question:recommended} = await api('/api/recommendation','POST',{role,exclude_question:currentQuestion});
+       const {question:recommended} = await api('/api/recommendation','POST',{role,exclude_question:currentQuestion,source_preference:'self_reported'});
        if (requestId !== recommendationRequestId || roleRevision !== revision || state.role !== role || $('#question').value !== currentQuestion) return;
        if (!recommended || recommended.sameAsCurrent || !['new','due'].includes(recommended.availability)) {
          showRecommendationChoice(recommended,role,revision,currentQuestion);
@@ -1150,6 +1136,28 @@ const toast = createToast(escapeHtml);
    useRecommendedQuestion(pending.recommended);
  });
 
+ $('#practice-generate')?.addEventListener('click', async () => {
+   const role = state.role, revision = roleRevision, question = $('#question').value, answer = $('#answer').value;
+   if (!role) { toast.error('请先设置目标岗位'); return; }
+   if (dialogueBusy) return;
+   if (answer.trim() && !window.confirm('生成新题会替换当前未提交的回答，确定继续吗？')) return;
+   const button = $('#practice-generate'), sessionRevision = dialogueRevision;
+   button.disabled = true; dialogueBusy = true; renderDialogue(); dialogueStatus('正在生成 AI 练习题…','info');
+   try {
+     const result = await api('/api/practice/dialogue/generate','POST',{role});
+     if (state.role !== role || roleRevision !== revision || dialogueRevision !== sessionRevision || $('#question').value !== question || $('#answer').value !== answer) {
+       toast('岗位或草稿已变化，生成结果未替换当前内容'); return;
+     }
+     if (!result.question || !result.generation_token) throw Error('生成题目无效，请重试');
+     clearPracticeHelp(); clearRecommendationChoice(); resetDialogue();
+     $('#question').value = result.question; $('#answer').value = ''; $('#answer-char-count').textContent = '0 字';
+     dialogue.role = role; dialogue.origin = 'ai'; dialogue.generation = {question:result.question, token:result.generation_token};
+     try { sessionStorage.setItem('practice-generated:' + role, JSON.stringify(dialogue.generation)); } catch {}
+     setQuestionContext({text:result.question,origin:'ai'}); scheduleDraft(); renderDialogue(); $('#answer').focus();
+   } catch (err) { if (state.role === role && roleRevision === revision && dialogueRevision === sessionRevision) dialogueStatus('AI 题生成失败：' + err.message, 'error'); }
+   finally { button.disabled = false; if (dialogueRevision === sessionRevision && state.role === role) { dialogueBusy = false; renderDialogue(); } }
+ });
+
  // Answer character counter
  const answerInput = $('#answer');
  const charCountEl = $('#answer-char-count');
@@ -1163,9 +1171,9 @@ const toast = createToast(escapeHtml);
  // Search form submission
  function updateSearchConditionsNotice() {
    if (!searchBatch?.statusText) return;
-   const current = {company:$('#company')?.value.trim() || '', range:$('#range')?.value || 'year', source:$('#search-source')?.value || 'all'};
+   const current = {company:$('#company')?.value.trim() || '', range:$('#range')?.value || 'year', source:$('#search-source')?.value || 'all', ai_relevance:$('#search-ai-relevance')?.checked === true};
    const previous = searchBatch.conditions;
-   const changed = current.company !== previous.company || current.range !== previous.range || current.source !== previous.source;
+   const changed = current.company !== previous.company || current.range !== previous.range || current.source !== previous.source || current.ai_relevance !== previous.ai_relevance;
    const status = $('#search-status');
    if (status) status.textContent = searchBatch.statusText + (changed ? ' 搜索条件已更改，请重新搜索以更新结果。' : '');
  }
@@ -1195,6 +1203,7 @@ const toast = createToast(escapeHtml);
  }
 
  const searchForm = $('#search-form');
+ $('#search-ai-relevance')?.addEventListener?.('change', updateSearchConditionsNotice);
  if (searchForm) {
     searchButtonMarkup = $('#search-btn')?.innerHTML || '';
    searchForm.addEventListener('input', updateSearchConditionsNotice);
@@ -1206,6 +1215,7 @@ const toast = createToast(escapeHtml);
       const role = state.role;
       const sourceSelect = $('#search-source');
       const source = sourceSelect?.value || 'all';
+      const aiRelevance = $('#search-ai-relevance')?.checked === true;
       const sourceLabel = sourceSelect?.selectedOptions[0]?.textContent || '全部推荐来源';
       const company = $('#company')?.value.trim() || '';
       const range = $('#range')?.value || 'year';
@@ -1257,12 +1267,13 @@ const toast = createToast(escapeHtml);
          role,
          company,
          range,
-         source
+         source,
+         ai_relevance: aiRelevance
         }, controller.signal);
         if (requestId !== searchRequestId || state.role !== role) return;
        const matched = data.results || [], unverified = data.unverified_results || [];
        const statusText = `「${role}」找到 ${matched.length} 条可能相关的结果 · ${company || '不限公司'} · ${rangeLabel} · ${sourceLabel}。${data.notice || ''}`;
-       searchBatch = {role, results:[...matched,...unverified], conditions:{company,range,source}, statusText};
+       searchBatch = {role, results:[...matched,...unverified], conditions:{company,range,source,ai_relevance:aiRelevance}, statusText};
        updateSearchConditionsNotice();
        if (resultsEl) {
            const renderResult = (r, i) => {
@@ -1272,8 +1283,10 @@ const toast = createToast(escapeHtml);
              return `
              <article class="result-item">
                <div class="result-meta">
-                 <span class="apple-pill ${platformClass}">${escapeHtml(r.platform || '外部面经')}</span>
+                 <span class="apple-pill ${platformClass}">${escapeHtml(r.platform || '外部来源')}</span>
                  ${r.role_match === 'unknown' ? '<span class="apple-pill match-unknown">相关性待核实</span>' : (r.role_match === 'title_keyword' ? '<span class="apple-pill match-ok">标题含岗位关键词</span>' : '')}
+                 ${r.company_match === 'unknown' ? '<span class="apple-pill match-unknown">公司待核实</span>' : (r.company_match === 'title_keyword' ? '<span class="apple-pill match-ok">标题含公司词，待核实</span>' : '')}
+                 ${r.ai_relevance === 'related' ? '<span class="apple-pill match-ok">AI 初筛可能相关</span>' : (r.ai_relevance === 'unrelated' ? '<span class="apple-pill match-unknown">AI 判断可能无关</span>' : (r.ai_relevance === 'uncertain' ? '<span class="apple-pill match-unknown">AI 无法判断</span>' : ''))}
                  <span class="apple-pill date-pill">${r.date ? `日期参考 ${escapeHtml(r.date)}` : '发布时间以原帖为准'}</span>
                </div>
                <h4 class="result-title">
@@ -1283,6 +1296,7 @@ const toast = createToast(escapeHtml);
                  </a>
                </h4>
                ${searchSnippet(r.snippet)}
+               ${r.ai_evidence ? `<details class="result-details"><summary>查看 AI 判断引用的搜索摘要或标题</summary><div class="result-details-content"><p>${escapeHtml(Object.values(r.ai_evidence).filter(value => typeof value === 'string').join('；'))}</p><p>引用来自搜索结果，不代表原帖真实性。</p></div></details>` : ''}
                <div class="result-footer">
                  <div class="result-actions">
                    <button type="button" class="result-action-btn ${saved ? 'saved' : ''}" data-save="${i}" ${saved ? 'disabled' : ''}>${saved ? '已收藏' : '+ 收藏来源'}</button>
@@ -1297,12 +1311,12 @@ const toast = createToast(escapeHtml);
            `; };
            const matchesMarkup = matched.length ? matched.map(renderResult).join('') : `
              <div class="apple-empty-state" style="padding: 28px;">
-               <div class="empty-state-desc">暂时没有找到可能相关的面试内容。请检查目标岗位，或调整时间范围和公司关键词。</div>
+               <div class="empty-state-desc">${data.partial_failure ? '部分检索失败，暂时没有可展示的相关结果，请重试。' : '暂时没有找到可能相关的面试内容。请检查目标岗位，或调整时间范围和公司关键词。'}</div>
              </div>`;
            const unverifiedMarkup = unverified.length ? `
              <details class="search-unverified">
                <summary>另有 ${unverified.length} 条相关性未确认（可能无关）</summary>
-               <p>以下标题缺少岗位关键词或面试线索，可能包含相关结果，也可能完全无关；请打开原帖核实。</p>
+               <p>以下结果的岗位、公司或面试线索不足，或 AI 判断可能无关；请打开原帖核实。</p>
                ${unverified.map((result, index) => renderResult(result, matched.length + index)).join('')}
              </details>` : '';
            resultsEl.innerHTML = matchesMarkup + unverifiedMarkup;
@@ -1395,117 +1409,160 @@ const toast = createToast(escapeHtml);
  $('#search-target-pill')?.addEventListener('click', () => switchTab('role'));
 
  // AI Review submission
- const reviewForm = $('#review-form');
- if (reviewForm) {
-   reviewForm.addEventListener('submit', async e => {
-     e.preventDefault();
-     const button = $('#review-btn');
-     if (button) button.disabled = true;
-     const originalBtnText = button ? button.innerHTML : '';
-     if (button) button.innerHTML = `<span>正在生成点评…</span>`;
-
-     const reviewStatus = $('#review-status');
-     if (reviewStatus) {
-       reviewStatus.hidden = false;
-       reviewStatus.className = 'status-banner info';
-       reviewStatus.textContent = '正在生成点评与追问，请稍候…';
-     }
-     const emptyResult = $('#practice-result-empty');
-     if (emptyResult) emptyResult.hidden = true;
-     const feedbackEl = $('#feedback');
-     if (feedbackEl) feedbackEl.hidden = true;
-
-     try {
-        const submitted = {role: state.role || $('#role')?.value, question: $('#question')?.value, answer: $('#answer')?.value, parent_attempt_id:questionContext?.parentId || '',question_ref:questionContext?.questionRef || null};
-        const result = await api('/api/review', 'POST', submitted);
-        if (state.role !== submitted.role || $('#question').value !== submitted.question || $('#answer').value !== submitted.answer) {
-          if (reviewStatus) { reviewStatus.className = 'status-banner neutral'; reviewStatus.textContent = '题目或岗位已变化，点评已保存到原练习记录。'; }
-          await refresh();
-          return;
-        }
-
-       if (feedbackEl) {
-         feedbackEl.innerHTML = `
-           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid rgba(0,0,0,0.06); padding-bottom:8px;">
-             <span style="font-weight:700; color:var(--apple-blue); font-size:13px; display:inline-flex; align-items:center; gap:6px;">
-               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>
-              AI 复习点评
-             </span>
-             <button type="button" class="text-link-action" id="copy-feedback-btn">复制点评</button>
-           </div>
-           <div class="feedback-body">${escapeHtml(result.feedback)}</div>
-            ${result.follow_up ? `<div class="followup-question"><strong>追问</strong><p>${escapeHtml(result.follow_up)}</p></div>` : ''}
-            <div class="review-assessment" aria-label="本次练习自评"><strong>这道题感觉怎么样？</strong><div class="review-actions">
-              <button type="button" class="practice-question-action" data-rating="revisit" aria-pressed="false">需要再练</button>
-              <button type="button" class="practice-question-action" data-rating="comfortable" aria-pressed="false">比较熟悉</button>
-              <button type="button" class="practice-question-action" data-rating="unassessed" aria-pressed="true">暂不评价</button>
-            </div><span class="review-assessment-status" role="status">自评会影响题库推荐。</span></div>
-            <div class="review-actions review-next-actions">
-              <button type="button" class="practice-question-action" id="retry-answer">重新作答</button>
-              ${result.follow_up ? '<button type="button" class="practice-question-action" id="answer-followup">回答追问</button>' : ''}
-              <button type="button" class="practice-question-action" id="review-next-question">推荐下一题</button>
-            </div>
-         `;
-         feedbackEl.hidden = false;
-       }
-
-       if (reviewStatus) {
-         reviewStatus.className = 'status-banner neutral';
-         reviewStatus.textContent = '点评已生成，可结合实际情况参考。';
-       }
-
-       const copyBtn = $('#copy-feedback-btn');
-       if (copyBtn) {
-         copyBtn.addEventListener('click', async () => {
-           try {
-             await navigator.clipboard.writeText(result.feedback);
-            toast.success('已复制点评到剪贴板');
-           } catch {
-            toast.error('复制失败，请手动选取文本');
-           }
-          });
-        }
-
-        feedbackEl.querySelectorAll('[data-rating]').forEach(ratingButton => ratingButton.addEventListener('click', async () => {
-          const buttons=feedbackEl.querySelectorAll('[data-rating]'), status=feedbackEl.querySelector('.review-assessment-status');
-          buttons.forEach(item=>item.disabled=true);
-          try {
-            await api('/api/attempts/' + encodeURIComponent(result.id) + '/assessment','PUT',{rating:ratingButton.dataset.rating});
-            buttons.forEach(item=>item.setAttribute('aria-pressed',String(item===ratingButton)));
-            status.textContent=ratingButton.dataset.rating === 'revisit' ? '已保存：这题会优先推荐。' : ratingButton.dataset.rating === 'comfortable' ? '已保存：这题会稍后推荐。' : '已设为尚未自评。';
-            await refresh();
-          } catch(err) { status.textContent='自评保存失败：'+err.message; }
-          finally { buttons.forEach(item=>item.disabled=false); }
-        }));
-        $('#retry-answer').addEventListener('click', () => {
-          if(state.role!==submitted.role || $('#question').value!==submitted.question) { toast('当前题目已变化，请从练习记录查看原作答'); return; }
-          $('#answer').focus();
-        });
-        $('#answer-followup')?.addEventListener('click', () => {
-          if(state.role!==submitted.role || $('#question').value!==submitted.question) { toast('当前题目已变化，请先完成当前练习'); return; }
-          if($('#answer').value!==submitted.answer && $('#answer').value.trim() && !window.confirm('当前回答有新的修改，切换到追问会替换它。确定继续吗？')) return;
-          clearPracticeHelp(); clearRecommendationChoice();
-          $('#question').value=result.follow_up; $('#answer').value=''; $('#answer-char-count').textContent='0 字';
-          setQuestionContext({text:result.follow_up,parentId:result.id}); scheduleDraft(); $('#answer').focus();
-        });
-        $('#review-next-question').addEventListener('click', () => $('#pick-from-lib-btn').click());
-
-       await refresh();
-      toast.success('AI 点评已生成');
-     } catch (err) {
-       if (reviewStatus) {
-         reviewStatus.className = 'status-banner error';
-         reviewStatus.textContent = err.message;
-       }
-     } finally {
-       if (button) {
-         button.disabled = false;
-         button.innerHTML = originalBtnText;
-       }
-     }
-   });
+ // One question at a time: each saved turn remains visible in the conversation.
+ function maybeAutoSelectPractice() {
+   if (!$('#pane-practice')?.classList.contains('active') || !state.role || $('#question').value || dialogueBusy || practiceAutopickRole === state.role) return;
+   practiceAutopickRole = state.role;
+   $('#pick-from-lib-btn')?.click();
  }
 
+ function dialogueStatus(message, kind='neutral') {
+   const el = $('#review-status');
+   if (!el) return;
+   el.hidden = !message; el.className = 'status-banner ' + kind; el.textContent = message || '';
+ }
+
+ function resetDialogue(forget=true) {
+   const oldRole = dialogue.role || state.role;
+   dialogueRevision++; dialogueBusy = false; dialogueRequest = null;
+   dialogue = {role:'', turns:[], summary:'', origin:'', generation:null};
+   if (forget && oldRole) {
+     try { sessionStorage.removeItem('practice-dialogue:' + oldRole); sessionStorage.removeItem('practice-generated:' + oldRole); sessionStorage.removeItem('practice-request:' + oldRole); } catch {}
+   }
+   if ($('#question')) $('#question').readOnly = false;
+   if ($('#answer')) $('#answer').readOnly = false;
+   dialogueStatus(''); renderDialogue();
+ }
+
+ function renderDialogue() {
+   const stream = $('#dialogue-stream'); if (!stream) return;
+   const origins = {source:'已确认的来源题', debrief:'个人面试记录', ai:'AI 生成题', user:'手动输入的题目'};
+   let html = '';
+   if (dialogue.turns.length) {
+     if (dialogue.sourceAvailable === false) html += '<p class="dialogue-empty">原题来源已不可用，以下保留的是当时的练习记录。</p>';
+     html += dialogue.turns.map((turn,index) => `
+       <div class="dialogue-message"><strong>${index ? 'AI 追问' : escapeHtml(origins[dialogue.origin] || '练习题')}</strong><p>${escapeHtml(turn.question)}</p></div>
+       <div class="dialogue-message dialogue-message--answer"><strong>你的回答</strong><p>${escapeHtml(turn.answer)}</p></div>
+       <div class="dialogue-message"><strong>AI 点评 · 仅供参考</strong><p>${escapeHtml(turn.feedback)}</p></div>`).join('');
+     const last = dialogue.turns[dialogue.turns.length - 1];
+     if (!dialogue.summary && last.follow_up && dialogue.turns.length < 8) html += `<div class="dialogue-message"><strong>AI 追问 · 非原帖问题</strong><p>${escapeHtml(last.follow_up)}</p></div>`;
+     if (dialogue.summary) html += `<div class="dialogue-message dialogue-message--summary"><strong>本题总结 · AI 生成，仅供参考</strong><p>${escapeHtml(dialogue.summary)}</p></div>`;
+     html += `<div class="review-assessment" aria-label="本题自评"><strong>这道题感觉怎么样？</strong><div class="review-actions"><button type="button" class="practice-question-action" data-dialogue-rating="revisit">需要再练</button><button type="button" class="practice-question-action" data-dialogue-rating="comfortable">比较熟悉</button><button type="button" class="practice-question-action" data-dialogue-rating="unassessed">暂不评价</button></div><span class="review-assessment-status" role="status">自评会影响题库推荐。</span></div>`;
+   } else {
+     html = '<div class="dialogue-empty">选择题目后开始回答，我们会围绕你的回答继续交流。</div>';
+   }
+   stream.innerHTML = html;
+   const last = dialogue.turns[dialogue.turns.length - 1];
+   const cannotContinue = !!dialogue.summary || (!!last && (!last.follow_up || dialogue.turns.length >= 8));
+   $('#question').readOnly = dialogueBusy || (!!last && !dialogue.summary);
+   $('#answer').readOnly = dialogueBusy || cannotContinue;
+   $('#review-btn').disabled = dialogueBusy || cannotContinue;
+   const finish = $('#dialogue-finish');
+   finish.hidden = !last || !!dialogue.summary; finish.disabled = dialogueBusy;
+   $('#pick-from-lib-btn').disabled = dialogueBusy;
+ }
+
+ async function restoreDialogue(role, draft) {
+   if (!role) return;
+   const revision = dialogueRevision;
+   dialogue.role = role;
+   let saved = null, generated = null;
+   try {
+     saved = JSON.parse(sessionStorage.getItem('practice-dialogue:' + role) || 'null');
+     generated = JSON.parse(sessionStorage.getItem('practice-generated:' + role) || 'null');
+     dialogueRequest = JSON.parse(sessionStorage.getItem('practice-request:' + role) || 'null');
+   } catch {}
+   if (generated?.question === $('#question').value && !draft?.parent_attempt_id) {
+     dialogue.generation = generated; dialogue.origin = 'ai';
+     setQuestionContext({text:generated.question,origin:'ai'});
+   }
+   const id = saved?.id || draft?.parent_attempt_id;
+   if (!id) { renderDialogue(); return; }
+   const currentQuestion = $('#question').value, currentAnswer = $('#answer').value;
+   try {
+     const result = await api('/api/practice/dialogue/' + encodeURIComponent(id) + '?role=' + encodeURIComponent(role));
+     if (dialogueRevision !== revision || state.role !== role || $('#question').value !== currentQuestion || $('#answer').value !== currentAnswer) return;
+     dialogue = {role,turns:result.turns || [],origin:result.origin || 'user',summary:result.summary || '',sourceAvailable:result.source_available,generation:null};
+     renderDialogue();
+     if (dialogue.summary) dialogueStatus('已恢复本题总结。');
+     else if (dialogue.turns.length) dialogueStatus('已恢复本题对话与当前岗位草稿。');
+   } catch (err) {
+     if (dialogueRevision === revision && state.role === role) dialogueStatus('之前的对话暂时无法恢复，草稿仍在：' + err.message + '。可刷新重试。', 'error');
+   }
+ }
+
+ $('#question').addEventListener('input', () => {
+   if (dialogue.turns.length || (dialogue.generation && $('#question').value !== dialogue.generation.question)) resetDialogue();
+ });
+
+ $('#dialogue-stream').addEventListener('click', async e => {
+   const button = e.target.closest('[data-dialogue-rating]');
+   const first = dialogue.turns[0]; if (!button || !first) return;
+   const status = $('#dialogue-stream .review-assessment-status');
+   const role = state.role, revision = dialogueRevision;
+   try {
+     await api('/api/attempts/' + encodeURIComponent(first.id) + '/assessment','PUT',{rating:button.dataset.dialogueRating});
+     if (role !== state.role || revision !== dialogueRevision) return;
+     status.textContent = button.dataset.dialogueRating === 'revisit' ? '已保存：这题会优先推荐。' : button.dataset.dialogueRating === 'comfortable' ? '已保存：这题会稍后推荐。' : '已设为尚未自评。';
+     await refresh();
+   } catch (err) { if (status && role === state.role && revision === dialogueRevision) status.textContent = '自评保存失败：' + err.message; }
+ });
+
+ const reviewForm = $('#review-form');
+ if (reviewForm) reviewForm.addEventListener('submit', async e => {
+   e.preventDefault(); if (dialogueBusy) return;
+   const role = state.role, question = $('#question').value.trim(), answer = $('#answer').value.trim();
+   if (!role) { dialogueStatus('请先设置目标岗位。','error'); return; }
+   if (!question || !answer) { dialogueStatus('请先填写问题和回答。','error'); return; }
+   if (question.length > 2000 || answer.length > 10000) { dialogueStatus('问题最多 2000 字，回答最多 10000 字；请缩短后再提交。','error'); return; }
+   if (dialogue.summary || dialogue.turns.length >= 8) { dialogueStatus('本题已结束，请选择新题。','error'); return; }
+   const payload = {role,question,answer,parent_attempt_id:questionContext?.parentId || '',question_ref:questionContext?.questionRef || null,generation_token:dialogue.generation?.question === question ? dialogue.generation.token : ''};
+   const signature = JSON.stringify(payload);
+   if (!dialogueRequest || dialogueRequest.signature !== signature) dialogueRequest = {signature,id:crypto.randomUUID()};
+   payload.request_id = dialogueRequest.id;
+   try { sessionStorage.setItem('practice-request:' + role, JSON.stringify(dialogueRequest)); } catch {}
+   const revision = dialogueRevision, roleAtSubmit = roleRevision;
+   dialogueBusy = true; renderDialogue(); dialogueStatus('正在围绕你的回答生成点评和追问…','info');
+   try {
+     await writeDraft();
+     if (dialogueRevision !== revision || roleRevision !== roleAtSubmit || state.role !== role) return;
+     const result = await api('/api/practice/dialogue/turn','POST',payload);
+     if (dialogueRevision !== revision || roleRevision !== roleAtSubmit || state.role !== role) return;
+     dialogue.role = role; dialogue.origin = dialogue.origin || result.origin || 'user';
+     dialogue.turns.push({id:result.id,question,answer,feedback:result.feedback,follow_up:result.follow_up || ''});
+     dialogue.generation = null; dialogueRequest = null;
+     try { sessionStorage.removeItem('practice-generated:' + role); sessionStorage.removeItem('practice-request:' + role); sessionStorage.setItem('practice-dialogue:' + role, JSON.stringify({id:result.id})); } catch {}
+     const canFollow = result.follow_up && dialogue.turns.length < 8;
+     if (canFollow) { $('#question').value = result.follow_up; setQuestionContext({text:result.follow_up,parentId:result.id}); }
+     $('#answer').value = ''; $('#answer-char-count').textContent = '0 字';
+     dialogueBusy = false; renderDialogue();
+     dialogueStatus(canFollow ? '可以继续回答 AI 追问，也可以结束并总结。' : dialogue.turns.length >= 8 ? '本题已达到 8 轮上限，请结束并总结。' : '本题暂时没有更多追问，可以结束并总结。');
+     try { await writeDraft(); } catch { dialogueStatus('本轮已保存，但新草稿保存失败；刷新后请从练习记录查看。','error'); }
+     await refresh().catch(() => {});
+     if (canFollow) $('#answer').focus();
+   } catch (err) {
+     if (dialogueRevision === revision && state.role === role) dialogueStatus('发送失败，回答仍保留在输入框：' + err.message + '。可重试。','error');
+   } finally {
+     if (dialogueRevision === revision && state.role === role) { dialogueBusy = false; renderDialogue(); }
+   }
+ });
+
+ $('#dialogue-finish').addEventListener('click', async () => {
+   if (dialogueBusy || !dialogue.turns.length || dialogue.summary) return;
+   if ($('#answer').value.trim() && !window.confirm('当前回答尚未发送。结束后它会保留在草稿中，确定结束并总结吗？')) return;
+   const role = state.role, revision = dialogueRevision, roleAtSubmit = roleRevision;
+   const last = dialogue.turns[dialogue.turns.length - 1];
+   dialogueBusy = true; renderDialogue(); dialogueStatus('正在整理本题对话总结…','info');
+   try {
+     await writeDraft();
+     if (dialogueRevision !== revision || roleRevision !== roleAtSubmit || state.role !== role) return;
+     const result = await api('/api/practice/dialogue/summary','POST',{role,attempt_id:last.id});
+     if (dialogueRevision !== revision || roleRevision !== roleAtSubmit || state.role !== role) return;
+     dialogue.summary = result.summary; dialogueBusy = false; renderDialogue();
+     dialogueStatus($('#answer').value.trim() ? '总结已保存，未发送的回答仍保留在草稿中。' : '总结已保存，可以选择下一题。');
+   } catch (err) { if (dialogueRevision === revision && state.role === role) dialogueStatus('总结失败，原有对话和草稿仍保留：' + err.message,'error'); }
+   finally { if (dialogueRevision === revision && state.role === role) { dialogueBusy = false; renderDialogue(); } }
+ });
  // Initial Startup
  const initialHash = window.location.hash.slice(1);
  if (initialHash && tabTitles[initialHash]) {

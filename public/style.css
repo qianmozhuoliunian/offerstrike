@@ -2879,3 +2879,22 @@ body {
   .page-welcome > .panel-header-copy,
   .library-page-header.page-welcome > div { max-width: none; }
 }
+
+/* Practice stays in one conversation instead of splitting answers and feedback. */
+.practice-layout { display: block; max-width: 920px; }
+.practice-card-header { margin-bottom: 20px; }
+.dialogue-stream { display: grid; gap: 14px; padding: 18px; border: 1px solid #e7e9dc; border-radius: 14px; background: #f8f8f2; }
+.dialogue-empty { color: var(--lens-text-secondary); font-size: 14px; line-height: 1.7; }
+.dialogue-message { max-width: 88%; padding: 12px 15px; border-radius: 14px; background: #fffefa; border: 1px solid #e8e8dd; overflow-wrap: anywhere; }
+.dialogue-message strong { display: block; margin-bottom: 5px; color: #536681; font-size: 12px; }
+.dialogue-message p { margin: 0; white-space: pre-wrap; color: var(--lens-text-primary); font-size: 14px; line-height: 1.7; }
+.dialogue-message--answer { justify-self: end; background: #edf2ff; border-color: #dce5f8; }
+.dialogue-message--summary { background: #f3f6e8; border-color: #dfe8c9; }
+.practice-submit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.practice-compose #answer { min-height: 120px; }
+#dialogue-finish[hidden], #review-status[hidden], #feedback[hidden] { display: none; }
+@media (max-width: 640px) {
+  .dialogue-stream { padding: 12px; }
+  .dialogue-message { max-width: 100%; }
+  .practice-submit-row > button { width: 100%; justify-content: center; }
+}

@@ -40,3 +40,20 @@ test('role keyword extraction works for mixed Chinese and Latin titles without m
   assert.deepEqual(filterSearchRelevance('AI算法工程师', items).results.map(item=>item.title), [titles[0]]);
   assert.deepEqual(filterSearchRelevance('Java开发工程师', items).results.map(item=>item.title), [titles[2]]);
 });
+
+test('specified company must have a title clue before a result is presented as potentially matching', () => {
+  const items = [
+    {title:'字节跳动产品经理一面面经', snippet:'记录面试经过。'},
+    {title:'腾讯产品经理一面面经', snippet:'评论区有人提到了字节跳动。'},
+    {title:'产品经理一面面经', snippet:'准备了字节跳动的资料。'},
+    {title:'字节跳动产品经理职业发展', snippet:'学习建议。'}
+  ];
+  const filtered=filterSearchRelevance('产品经理', items, {company:'字节跳动'});
+  assert.deepEqual(filtered.results.map(item=>item.title), [items[0].title]);
+  assert.equal(filtered.results[0].company_match,'title_keyword');
+  assert.deepEqual(filtered.unverified.map(item=>item.title), items.slice(1).map(item=>item.title));
+  assert.equal(filtered.unverified[0].company_match,'unknown');
+  assert.equal(filtered.unverified[1].company_match,'unknown');
+  assert.equal(filtered.unverified[2].company_match,'title_keyword');
+  assert.equal(filterSearchRelevance('产品经理',[items[1]]).results[0].company_match,'not_requested');
+});

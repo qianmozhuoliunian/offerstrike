@@ -1,5 +1,13 @@
 // External-service request construction and response validation.
-const SEARCH_SOURCES = Object.freeze({ nowcoder: 'nowcoder.com', juejin: 'juejin.cn', zhihu: 'zhihu.com' });
+export const SEARCH_SOURCES = Object.freeze({
+  nowcoder: 'nowcoder.com',
+  juejin: 'juejin.cn',
+  zhihu: 'zhihu.com',
+  csdn: 'csdn.net',
+  cnblogs: 'cnblogs.com',
+  '51cto': '51cto.com',
+  segmentfault: 'segmentfault.com'
+});
 
 export function searchSource(url) {
   try {
@@ -23,15 +31,17 @@ export function searchPublishedDate(value) {
   return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : '';
 }
 
-export function searchRequest(role, company, requirements, range, now = new Date(), source = 'all') {
+export function searchRequests(role, company, requirements, range, now = new Date(), source = 'all') {
   const months = { '3m': 3, '6m': 6, year: 12 };
   if (range !== 'all' && !months[range]) throw Error('不支持的时间范围');
   if (source !== 'all' && !Object.hasOwn(SEARCH_SOURCES, source)) throw Error('不支持的搜索来源');
+  const roleText = String(role || '').trim();
+  if (!roleText) throw Error('请先填写目标岗位');
   const companyText = String(company || '').trim();
   if (companyText.length > 100) throw Error('公司关键词不能超过 100 字');
-  const requirementPrefix = Array.from(String(requirements || '')).slice(0, 800).join('');
-  const query = `${role} 面经 面试经验 ${companyText} ${requirementPrefix}`;
-  const request = { query, search_depth: 'basic', max_results: 15, include_answer: false, include_raw_content: false, include_published_date: true };
+  // Search for the role and company, not the user's potentially long and private JD.
+  // Keep requirements in the signature for callers using the previous interface.
+  const request = { search_depth: 'basic', max_results: 15, include_answer: false, include_raw_content: false, include_published_date: true };
   request.include_domains = source === 'all' ? Object.values(SEARCH_SOURCES) : [SEARCH_SOURCES[source]];
   if (months[range]) {
     // Clamp the day when subtracting months (e.g. May 31 -> February 28).
@@ -39,7 +49,40 @@ export function searchRequest(role, company, requirements, range, now = new Date
     const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
     request.start_date = new Date(Date.UTC(year, month, Math.min(day, lastDay))).toISOString().slice(0, 10);
   }
-  return request;
+  return ['面经', '面试经验'].map(phrase => ({
+    ...request,
+    include_domains: [...request.include_domains],
+    query: [roleText, companyText, phrase].filter(Boolean).join(' ')
+  }));
+}
+
+export function searchRequest(role, company, requirements, range, now = new Date(), source = 'all') {
+  return searchRequests(role, company, requirements, range, now, source)[0];
+}
+
+// Collapse common tracking variants without dropping potentially meaningful query parameters.
+function canonicalResultUrl(value) {
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol)) return '';
+    url.hash = '';
+    for (const key of [...url.searchParams.keys()]) {
+      if (/^utm_/i.test(key) || ['spm', 'share_source', 'share_medium'].includes(key.toLowerCase())) url.searchParams.delete(key);
+    }
+    url.searchParams.sort();
+    const pathname = url.pathname.length > 1 ? url.pathname.replace(/\/$/, '') : url.pathname;
+    return `${url.host.toLowerCase()}${pathname}${url.search}`;
+  } catch { return ''; }
+}
+
+export function dedupeSearchResults(results) {
+  const seen = new Set();
+  return results.filter(result => {
+    const key = canonicalResultUrl(result?.url);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export function parseRequirements(content, jd) {

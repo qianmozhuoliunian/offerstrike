@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { searchRequest, searchSource, searchPublishedDate, parseRequirements, parseReview, parsePracticeHelp } from '../src/services.js';
+import { searchRequest, searchRequests, dedupeSearchResults, searchSource, searchPublishedDate, parseRequirements, parseReview, parsePracticeHelp } from '../src/services.js';
 import { isAllowedRequest } from '../src/request-security.js';
 import { filterSearchRelevance } from '../src/search-relevance.js';
 
@@ -35,22 +35,43 @@ test('search uses a real date range and requests estimated dates', () => {
   assert.throws(() => searchRequest('产品','','','unknown',now),/时间范围/);
 });
 
-test('search sends at most 800 complete role-requirement characters and rejects an overlong company', () => {
-  const requirements='要'.repeat(799)+'😀'+'末尾';
-  const query=searchRequest('产品经理','示例公司',requirements,'all').query;
-  assert.ok(query.endsWith('要'.repeat(799)+'😀'));
-  assert.ok(!query.includes('末尾'));
+test('search builds two constrained queries without sending private role requirements', () => {
+  const requirements='不应发送的岗位描述';
+  const queries=searchRequests('产品经理','示例公司',requirements,'6m',new Date('2026-05-31T12:00:00Z'),'cnblogs');
+  assert.deepEqual(queries.map(query=>query.query),['产品经理 示例公司 面经','产品经理 示例公司 面试经验']);
+  for (const query of queries) {
+    assert.deepEqual(query.include_domains,['cnblogs.com']);
+    assert.equal(query.start_date,'2025-11-30');
+    assert.ok(!query.query.includes(requirements));
+  }
+  assert.deepEqual(searchRequest('产品经理','示例公司',requirements,'all').query,'产品经理 示例公司 面经');
   assert.throws(()=>searchRequest('产品经理','公'.repeat(101),'','all'),/公司关键词不能超过 100/);
+  assert.throws(()=>searchRequest('','','','all'),/目标岗位/);
 });
 
 test('search limits platforms to the selected trusted domains', () => {
   const now=new Date('2026-05-31T12:00:00Z');
-  assert.deepEqual(searchRequest('产品','','','all',now).include_domains,['nowcoder.com','juejin.cn','zhihu.com']);
+  assert.deepEqual(searchRequest('产品','','','all',now).include_domains,['nowcoder.com','juejin.cn','zhihu.com','csdn.net','cnblogs.com','51cto.com','segmentfault.com']);
   assert.deepEqual(searchRequest('产品','','','all',now,'zhihu').include_domains,['zhihu.com']);
   assert.throws(()=>searchRequest('产品','','','all',now,'toString'),/搜索来源/);
   assert.equal(searchSource('https://www.nowcoder.com/discuss/1'),'nowcoder');
   assert.equal(searchSource('https://zhuanlan.zhihu.com/p/1'),'zhihu');
-  for (const url of ['https://nowcoder.com.evil.test/a','https://evil.test/?q=zhihu.com','javascript:alert(1)','not a url']) assert.equal(searchSource(url),null);
+  assert.equal(searchSource('https://blog.csdn.net/user/article/details/123'),'csdn');
+  assert.equal(searchSource('https://www.cnblogs.com/user/p/1.html'),'cnblogs');
+  assert.equal(searchSource('https://blog.51cto.com/user/1'),'51cto');
+  assert.equal(searchSource('https://segmentfault.com/a/1'),'segmentfault');
+  for (const url of ['https://nowcoder.com.evil.test/a','https://evil.test/?q=zhihu.com','https://csdn.net.evil.test/a','javascript:alert(1)','not a url']) assert.equal(searchSource(url),null);
+});
+
+test('deduplicates result links with tracking parameters without merging distinct content', () => {
+  const results = [
+    {url:'https://blog.csdn.net/a/article/details/1?utm_source=foo&spm=1#comments', title:'first'},
+    {url:'http://blog.csdn.net/a/article/details/1?utm_medium=bar',title:'duplicate'},
+    {url:'https://blog.csdn.net/a/article/details/1?page=2',title:'different parameter'},
+    {url:'https://blog.csdn.net/a/article/details/2',title:'different post'},
+    {url:'javascript:alert(1)',title:'invalid'}
+  ];
+  assert.deepEqual(dedupeSearchResults(results).map(item=>item.title), ['first','different parameter','different post']);
 });
 
 test('JD extraction rejects invalid, unrelated, or untraceable model output', () => {

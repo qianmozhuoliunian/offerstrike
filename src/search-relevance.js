@@ -31,8 +31,9 @@ function containsKeyword(title, keyword) {
   return title.includes(keyword);
 }
 
-export function filterSearchRelevance(role, results) {
+export function filterSearchRelevance(role, results, {company = ''} = {}) {
   const roleText = normalize(role);
+  const companyText = normalize(company);
   const keywords = roleKeywords(role);
   const isFrontend = frontend.test(role) && !/全栈|full[ -]?stack/i.test(role);
   const kept = [], unverified = [];
@@ -42,9 +43,17 @@ export function filterSearchRelevance(role, results) {
     if (isFrontend && !frontend.test(originalTitle) && backend.test(originalTitle)) { filtered++; continue; }
     const title = normalize(originalTitle);
     const roleInTitle = (roleText && containsKeyword(title, roleText)) || keywords.some(keyword => containsKeyword(title, keyword));
+    // Provider snippets can include comments or recommendations. Company names
+    // there alone do not establish that the author interviewed at that company.
+    const companyInTitle = !companyText || containsKeyword(title, companyText);
     const hasInterviewClue = interviewClue.test(`${originalTitle} ${String(result.snippet || '')}`);
-    if (roleInTitle && hasInterviewClue) kept.push({...result, role_match:'title_keyword'});
-    else unverified.push({...result, role_match:'unknown'});
+    const annotated = {
+      ...result,
+      role_match: roleInTitle && hasInterviewClue ? 'title_keyword' : 'unknown',
+      company_match: !companyText ? 'not_requested' : companyInTitle ? 'title_keyword' : 'unknown'
+    };
+    if (roleInTitle && hasInterviewClue && companyInTitle) kept.push(annotated);
+    else unverified.push(annotated);
   }
   return {results:kept, unverified, filtered};
 }

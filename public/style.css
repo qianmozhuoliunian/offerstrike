@@ -2716,3 +2716,34 @@ body { background: var(--lens-bg); }
 .search-target-pill:active {
   transform: scale(0.96);
 }
+
+/* Headline hierarchy: bold type with a restrained marker on key words. */
+.tab-pane h1,
+#pane-search > .panel-card > .panel-header-row h3,
+#pane-settings > .panel-card > .panel-header-row h3 {
+  font-family: "Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-weight: 800;
+  letter-spacing: -.025em;
+  line-height: 1.3;
+}
+#pane-search > .panel-card > .panel-header-row h3,
+#pane-settings > .panel-card > .panel-header-row h3 {
+  font-size: clamp(24px, 2.5vw, 30px);
+}
+.tab-pane h2 { font-weight: 700; }
+.title-keyword {
+  color: #192a20;
+  background: #d2ef82;
+  border-radius: .1em;
+  padding: .01em .1em .04em;
+  margin: 0 .025em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.section-keyword {
+  color: inherit;
+  background: linear-gradient(transparent 63%, #e2efbd 63%);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.search-header-title-wrap { flex-wrap: wrap; }

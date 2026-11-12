@@ -184,6 +184,9 @@ const files = {
   '/app.js': [new URL('./public/app.js', import.meta.url), 'text/javascript'],
   '/ui/toast.js': [new URL('./public/ui/toast.js', import.meta.url), 'text/javascript'],
   '/assets/interview-study-illustration.png': [new URL('./public/assets/interview-study-illustration.png', import.meta.url), 'image/png'],
+  '/assets/interview-discover.png': [new URL('./public/assets/interview-discover.png', import.meta.url), 'image/png'],
+  '/assets/interview-practice.png': [new URL('./public/assets/interview-practice.png', import.meta.url), 'image/png'],
+  '/assets/interview-planning.png': [new URL('./public/assets/interview-planning.png', import.meta.url), 'image/png'],
   '/style.css': [new URL('./public/style.css', import.meta.url), 'text/css']
 };
 const server = http.createServer(async (req, res) => {

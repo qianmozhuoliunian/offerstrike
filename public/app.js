@@ -317,23 +317,23 @@ const sourceExtraction = createSourceExtraction({api, getSource:id=>state.source
      return `
        <article class="source-item-card">
          <div class="source-card-main">
-           <div class="source-tags-row">
-             <span class="apple-pill ${typeClass}">${escapeHtml(s.type)}</span>
-             <span class="apple-pill gray">${dateLabel}</span>
-             <span class="apple-pill gray">${interviewDateLabel}</span>
-             <span class="apple-pill blue">${escapeHtml(s.role || '岗位未知')}</span>
-           </div>
            <h3 class="source-card-title">
              <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer">
                <span>${escapeHtml(s.title)}</span>
                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="7" y1="17" x2="17" y2="7"></line><polyline points="7 7 17 7 17 17"></polyline></svg>
              </a>
            </h3>
+           <div class="source-tags-row">
+             <span class="apple-pill ${typeClass}">${escapeHtml(s.type)}</span>
+             <span class="apple-pill gray">${dateLabel}</span>
+             <span class="apple-pill gray">${interviewDateLabel}</span>
+             <span class="apple-pill blue">${escapeHtml(s.role || '岗位未知')}</span>
+           </div>
            <details class="source-date-editor"><summary>修改面试发生时间</summary>
              <form class="source-date-form" data-source-date-form="${escapeHtml(s.id)}"><label for="interview-date-${escapeHtml(s.id)}">面试发生时间（留空表示未知）</label><input id="interview-date-${escapeHtml(s.id)}" name="interview_date" type="date" value="${escapeHtml(s.interview_date || '')}"><button type="submit" class="apple-btn apple-btn-secondary compact">保存时间</button></form>
            </details>
            <div class="source-questions">
-             <div class="source-questions-heading">关联题目 <span>${questions.length}</span></div>
+             <h4 class="source-questions-heading">关联题目 <span>${questions.length}</span></h4>
              ${questions.length ? questions.map(q => `
                <div class="source-question-row">
                   <div class="source-question-content"><div class="source-question-text">${escapeHtml(q.text)}</div>
@@ -349,9 +349,10 @@ const sourceExtraction = createSourceExtraction({api, getSource:id=>state.source
                  <button type="button" class="action-pill-btn primary" data-practice="${escapeHtml(q.id)}">练习这题</button>
                </div>`).join('') : '<p class="source-question-empty">暂无确认题目，可以从原文摘录后添加。</p>'}
              ${legacy ? `<div class="legacy-question"><strong>旧内容 · 待核实</strong><p>${escapeHtml(legacy)}</p><p>旧内容可能是搜索摘要，请核对原文后再作为题目保存。</p><button type="button" class="text-link-action" data-copy-legacy="${escapeHtml(s.id)}">复制到题目输入框</button></div>` : ''}
+             <h4 class="source-add-heading">添加题目</h4>
              ${sourceExtraction.render(s)}
              <details class="add-question-panel">
-               <summary>＋ 添加关联题目</summary>
+               <summary>手动添加关联题目</summary>
                <form class="add-question-form" data-question-form="${escapeHtml(s.id)}">
                  <label for="question-${escapeHtml(s.id)}">从原帖摘录或输入问题</label>
                  <textarea id="question-${escapeHtml(s.id)}" name="text" rows="2" required maxlength="2000" ${saveState === 'saving' ? 'disabled' : saveState === 'saved' ? 'readonly' : ''} placeholder="核对原帖后输入题目">${escapeHtml(draft.text)}</textarea>

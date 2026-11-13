@@ -2977,3 +2977,35 @@ body {
   #pane-practice .dialogue-message { padding: 16px; }
   #pane-practice .dialogue-history { padding: 4px 16px; }
 }
+
+/* Library source cards: title, confirmed questions, and ways to add a question. */
+#pane-library .source-item-card { padding: 26px 30px; border: 1px solid #d8dee8; border-radius: 12px; }
+#pane-library .source-card-title { max-width: 76ch; margin: 0 0 14px; font-size: 20px; font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; }
+#pane-library .source-card-title a { gap: 8px; align-items: baseline; }
+#pane-library .source-card-title a:hover { text-decoration: underline; }
+#pane-library .source-tags-row { gap: 8px; margin-bottom: 12px; }
+#pane-library .source-tags-row .apple-pill { padding: 4px 10px; font-size: 13px; line-height: 1.45; }
+#pane-library .source-date-editor { margin-top: 0; font-size: 14px; }
+#pane-library .source-questions { margin-top: 22px; padding-top: 22px; }
+#pane-library .source-questions-heading, #pane-library .source-add-heading { margin: 0; color: #1f2d45; font-size: 17px; font-weight: 700; line-height: 1.4; }
+#pane-library .source-questions-heading span { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: #eef2f7; color: #52637d; font-size: 13px; }
+#pane-library .source-question-empty { margin: 12px 0 0; font-size: 15px; line-height: 1.7; }
+#pane-library .source-question-row { gap: 16px; padding: 16px 0; }
+#pane-library .source-question-text { font-size: 16px; line-height: 1.75; font-weight: 600; }
+#pane-library .source-add-heading { margin-top: 26px; }
+#pane-library .ai-extract-panel, #pane-library .add-question-panel { margin-top: 12px; border: 1px solid #d8e1ee; border-radius: 8px; background: #f8faff; }
+#pane-library .ai-extract-panel > summary, #pane-library .add-question-panel > summary { min-height: 50px; padding: 13px 16px; color: #3159b7; font-size: 15px; font-weight: 700; line-height: 1.6; cursor: pointer; }
+#pane-library .ai-extract-panel > summary:hover, #pane-library .add-question-panel > summary:hover { background: #eef3ff; }
+#pane-library .ai-extract-panel > summary:focus-visible, #pane-library .add-question-panel > summary:focus-visible { outline: 3px solid #83a8f5; outline-offset: 2px; }
+#pane-library .ai-extract-body, #pane-library .add-question-form { max-width: 82ch; padding: 4px 18px 20px; gap: 12px; }
+#pane-library .add-question-form { margin-top: 0; }
+#pane-library .ai-extract-body > p, #pane-library .ai-candidates > p, #pane-library .question-source-hint, #pane-library .question-form-status { font-size: 14px; line-height: 1.75; }
+#pane-library .ai-extract-body label, #pane-library .add-question-form label { color: #253650; font-size: 15px; font-weight: 700; }
+#pane-library .add-question-form textarea, #pane-library .ai-extract-body textarea { font-size: 16px; line-height: 1.7; }
+#pane-library .source-card-actions .delete { min-height: 40px; font-size: 13px; }
+@media (max-width: 640px) {
+  #pane-library .source-item-card { padding: 20px 16px; gap: 8px; }
+  #pane-library .source-card-title { font-size: 18px; }
+  #pane-library .source-questions { margin-top: 18px; padding-top: 18px; }
+  #pane-library .ai-extract-body, #pane-library .add-question-form { padding: 4px 14px 16px; }
+}

@@ -2905,6 +2905,11 @@ body {
 .dialogue-message p { margin: 0; white-space: pre-wrap; color: var(--lens-text-primary); font-size: 14px; line-height: 1.7; }
 .dialogue-message--answer { justify-self: end; background: #edf2ff; border-color: #dce5f8; }
 .dialogue-message--summary { background: #f3f6e8; border-color: #dfe8c9; }
+.dialogue-history { color: var(--lens-text-secondary); font-size: 13px; }
+.dialogue-history summary, .coaching-details summary { cursor: pointer; color: var(--lens-primary); font-weight: 600; padding: 10px 0; }
+.dialogue-history-content { display: grid; gap: 12px; margin: 8px 0 16px; }
+.coaching-details p { margin-top: 9px; }
+.dialogue-history summary:focus-visible, .coaching-details summary:focus-visible { outline: 3px solid #83a8f5; outline-offset: 2px; }
 .dialogue-message--feedback, .dialogue-message--summary { scroll-margin-top: 85px; }
 .role-coaching-focus { margin: 0; padding: 10px 12px; border-left: 3px solid #91ad53; color: var(--lens-text-secondary); background: #f5f8ed; line-height: 1.6; font-size: 13px; }
 .dialogue-message--feedback > p + p { margin-top: 9px; }

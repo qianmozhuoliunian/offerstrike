@@ -32,6 +32,7 @@ const tick = () => new Promise(resolve=>setImmediate(resolve));
 
 test('a sourced question stays in one conversation through a follow-up and summary', async () => {
   const h=harness(); const first=submit(h); await tick();
+  assert.match(h.elements['#review-btn'].innerHTML,/处理中/);
   assert.equal(h.calls[0].path,'/api/practice/dialogue/turn');
   assert.equal(h.calls[0].data.question_ref.id,'q1');
   h.calls[0].resolve({id:'turn-1',feedback:'先确认目标',follow_up:'如何验证？',origin:'source'}); await first;
@@ -42,10 +43,13 @@ test('a sourced question stays in one conversation through a follow-up and summa
   assert.equal(h.calls[1].data.parent_attempt_id,'turn-1');
   h.calls[1].resolve({id:'turn-2',feedback:'可以补充样本',follow_up:'',origin:'source'}); await second;
   assert.equal(h.elements['#review-btn'].disabled,true);
+  assert.match(h.elements['#dialogue-stream'].innerHTML,/<details class="dialogue-history"><summary>查看之前的 1 轮对话/);
+  assert.match(h.elements['#dialogue-stream'].innerHTML,/<\/details>\s*<div class="dialogue-message"><strong>AI 追问/);
   const finish=h.events['#dialogue-finish:click'](); await tick();
   assert.equal(h.calls[2].path,'/api/practice/dialogue/summary');
   h.calls[2].resolve({summary:'总结：下次补充验证方法'}); await finish;
   assert.match(h.elements['#dialogue-stream'].innerHTML,/总结：下次补充验证方法/);
+  assert.match(h.elements['#dialogue-stream'].innerHTML,/查看之前的 2 轮对话/);
 });
 
 test('failed sends preserve the answer and retry with the same idempotency key', async () => {

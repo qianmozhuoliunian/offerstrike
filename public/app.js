@@ -235,8 +235,8 @@ const sourceExtraction = createSourceExtraction({api, getSource:id=>state.source
    if (searchRole) searchRole.textContent = displayRole;
    const roleFocus = $('#role-coaching-focus');
    if (roleFocus) {
-     roleFocus.hidden = !state.role || !state.roleCoaching?.focus;
-     roleFocus.textContent = roleFocus.hidden ? '' : `本岗位练习参考 · ${state.roleCoaching.name}：${state.roleCoaching.focus}`;
+     roleFocus.hidden = !!dialogue.turns.length || !state.role || !state.roleCoaching?.focus;
+     roleFocus.textContent = state.role && state.roleCoaching?.focus ? `本岗位练习参考 · ${state.roleCoaching.name}：${state.roleCoaching.focus}` : '';
    }
 
    // Dashboard metric widgets
@@ -1454,21 +1454,26 @@ const sourceExtraction = createSourceExtraction({api, getSource:id=>state.source
 
  function renderDialogue() {
    const stream = $('#dialogue-stream'); if (!stream) return;
+   const historyOpen = !!stream.querySelector?.('.dialogue-history')?.open;
    const origins = {source:'已确认的来源题', debrief:'个人面试记录', ai:'AI 生成题', user:'手动输入的题目'};
    let html = '';
    if (dialogue.turns.length) {
      if (dialogue.sourceAvailable === false) html += '<p class="dialogue-empty">原题来源已不可用，以下保留的是当时的练习记录。</p>';
-     html += dialogue.turns.map((turn,index) => `
+     const renderTurn = (turn,index) => `
        <div class="dialogue-message"><strong>${index ? 'AI 追问' : escapeHtml(origins[dialogue.origin] || '练习题')}</strong><p>${escapeHtml(turn.question)}</p></div>
        <div class="dialogue-message dialogue-message--answer"><strong>你的回答</strong><p>${escapeHtml(turn.answer)}</p></div>
-       <div class="dialogue-message dialogue-message--feedback"><strong>AI 点评 · 仅供参考</strong>${turn.coaching ? `<p class="coaching-focus"><b>本题重点</b> ${escapeHtml(turn.coaching.focus)}</p><p class="coaching-evidence"><b>回答摘录</b> “${escapeHtml(turn.coaching.evidence)}”</p>` : '<p class="coaching-unverified">本条点评没有可核对的回答摘录。</p>'}<p>${escapeHtml(turn.feedback)}</p>${turn.coaching ? `<p class="coaching-next"><b>可以再练</b> ${escapeHtml(turn.coaching.next_step)}</p>` : ''}</div>`).join('');
+       <div class="dialogue-message dialogue-message--feedback"><strong>AI 点评 · 仅供参考</strong><p>${escapeHtml(turn.feedback)}</p>${turn.coaching ? `<details class="coaching-details"><summary>查看点评依据与建议</summary><p class="coaching-focus"><b>本题重点</b> ${escapeHtml(turn.coaching.focus)}</p><p class="coaching-evidence"><b>回答摘录</b> “${escapeHtml(turn.coaching.evidence)}”</p><p class="coaching-next"><b>可以再练</b> ${escapeHtml(turn.coaching.next_step)}</p></details>` : '<p class="coaching-unverified">本条点评没有可核对的回答摘录。</p>'}</div>`;
+     const previous = dialogue.summary ? dialogue.turns : dialogue.turns.slice(0,-1);
+     if (previous.length) html += `<details class="dialogue-history"${historyOpen ? ' open' : ''}><summary>查看之前的 ${previous.length} 轮对话</summary><div class="dialogue-history-content">${previous.map(renderTurn).join('')}</div></details>`;
+     if (!dialogue.summary) html += renderTurn(dialogue.turns.at(-1),dialogue.turns.length-1);
      const last = dialogue.turns[dialogue.turns.length - 1];
      if (!dialogue.summary && last.follow_up && dialogue.turns.length < 8) html += `<div class="dialogue-message"><strong>AI 追问 · 非原帖问题</strong><p>${escapeHtml(last.follow_up)}</p></div>`;
      if (dialogue.summary) {
        const coaching = [...dialogue.turns].reverse().find(turn=>turn.coaching)?.coaching;
        html += `<div class="dialogue-message dialogue-message--summary"><strong>本题总结 · AI 生成，仅供参考</strong><p>${escapeHtml(dialogue.summary)}</p>${coaching ? `<div class="coaching-action"><p>下一步：${escapeHtml(coaching.next_step)}</p><button type="button" class="practice-question-action" data-dialogue-reinforce ${dialogueBusy ? 'disabled' : ''}>生成一道针对性补练</button><small>会向 AI 发送本题完整对话和已确认的岗位要求；新题由 AI 生成。</small></div>` : ''}</div>`;
      }
-     html += `<div class="review-assessment" aria-label="本题自评"><strong>这道题感觉怎么样？</strong><div class="review-actions"><button type="button" class="practice-question-action" data-dialogue-rating="revisit">需要再练</button><button type="button" class="practice-question-action" data-dialogue-rating="comfortable">比较熟悉</button><button type="button" class="practice-question-action" data-dialogue-rating="unassessed">暂不评价</button></div><span class="review-assessment-status" role="status">自评会影响题库推荐。</span></div>`;
+     const rating = (state.attempts || []).find(item=>item.id===dialogue.turns[0].id)?.rating || 'unassessed';
+     html += `<div class="review-assessment" aria-label="本题自评"><strong>这道题感觉怎么样？</strong><div class="review-actions"><button type="button" class="practice-question-action" data-dialogue-rating="revisit" aria-pressed="${rating==='revisit'}">需要再练</button><button type="button" class="practice-question-action" data-dialogue-rating="comfortable" aria-pressed="${rating==='comfortable'}">比较熟悉</button><button type="button" class="practice-question-action" data-dialogue-rating="unassessed" aria-pressed="${rating==='unassessed'}">暂不评价</button></div><span class="review-assessment-status" role="status">自评会影响题库推荐。</span></div>`;
    } else {
      html = '<div class="dialogue-empty">选择题目后开始回答，我们会围绕你的回答继续交流。</div>';
    }
@@ -1478,6 +1483,9 @@ const sourceExtraction = createSourceExtraction({api, getSource:id=>state.source
    $('#question').readOnly = dialogueBusy || (!!last && !dialogue.summary);
    $('#answer').readOnly = dialogueBusy || cannotContinue;
    $('#review-btn').disabled = dialogueBusy || cannotContinue;
+   $('#review-btn').innerHTML = dialogueBusy ? '<span>处理中…</span>' : '<span>发送回答</span><span aria-hidden="true">→</span>';
+   const choice=$('#recommendation-choice'); if (choice && last) choice.hidden=true;
+   const focus=$('#role-coaching-focus'); if (focus) focus.hidden=!!last || !state.role || !state.roleCoaching?.focus;
    const finish = $('#dialogue-finish');
    finish.hidden = !last || !!dialogue.summary; finish.disabled = dialogueBusy;
    $('#pick-from-lib-btn').disabled = dialogueBusy;
@@ -1544,12 +1552,16 @@ const sourceExtraction = createSourceExtraction({api, getSource:id=>state.source
    const first = dialogue.turns[0]; if (!button || !first) return;
    const status = $('#dialogue-stream .review-assessment-status');
    const role = state.role, revision = dialogueRevision;
+   const ratingButtons = [...($('#dialogue-stream')?.querySelectorAll?.('[data-dialogue-rating]') || [button])];
+   ratingButtons.forEach(item=>{ item.disabled=true; }); if (status) status.textContent='正在保存自评…';
    try {
      await api('/api/attempts/' + encodeURIComponent(first.id) + '/assessment','PUT',{rating:button.dataset.dialogueRating});
      if (role !== state.role || revision !== dialogueRevision) return;
      status.textContent = button.dataset.dialogueRating === 'revisit' ? '已保存：这题会优先推荐。' : button.dataset.dialogueRating === 'comfortable' ? '已保存：这题会稍后推荐。' : '已设为尚未自评。';
+     ratingButtons.forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
      await refresh();
    } catch (err) { if (status && role === state.role && revision === dialogueRevision) status.textContent = '自评保存失败：' + err.message; }
+   finally { ratingButtons.forEach(item=>{ item.disabled=false; }); }
  });
 
  const reviewForm = $('#review-form');

@@ -2909,6 +2909,14 @@ body {
 .dialogue-history summary, .coaching-details summary { cursor: pointer; color: var(--lens-primary); font-weight: 600; padding: 10px 0; }
 .dialogue-history-content { display: grid; gap: 12px; margin: 8px 0 16px; }
 .coaching-details p { margin-top: 9px; }
+.candidate-progress { display: inline-block; margin: 12px 0; padding: 4px 10px; border: 1px solid #d0d7de; border-radius: 999px; color: #34465c; background: #fff; font-size: 13px; font-weight: 700; }
+.candidate-progress:focus-visible { outline: 3px solid #83a8f5; outline-offset: 3px; }
+.ai-candidate { border: 1px solid #d0d7de; border-radius: 8px; background: #fff; }
+.ai-candidate label { font-size: 14px; font-weight: 700; }
+.ai-candidate blockquote { border-left: 3px solid #afb8c1; background: #f6f8fa; }
+.candidate-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.candidate-actions button { min-height: 44px; }
+.candidate-hint { margin: 10px 0 0; color: var(--lens-text-secondary); font-size: 13px; }
 .dialogue-history summary:focus-visible, .coaching-details summary:focus-visible { outline: 3px solid #83a8f5; outline-offset: 2px; }
 .dialogue-message--feedback, .dialogue-message--summary { scroll-margin-top: 85px; }
 .role-coaching-focus { margin: 0; padding: 10px 12px; border-left: 3px solid #91ad53; color: var(--lens-text-secondary); background: #f5f8ed; line-height: 1.6; font-size: 13px; }

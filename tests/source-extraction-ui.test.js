@@ -10,9 +10,23 @@ function harness(refresh=async()=>{}) {
   extraction.attach(container);
   const panel={querySelector:()=>null,querySelectorAll:()=>[]};
   const input=value=>{const field={value,dataset:{extractText:source.id},closest:selector=>selector==='[data-extract-text]'?field:selector==='[data-extract-panel]'?panel:null};listeners.input({target:field});};
+  const edit=(id,value)=>{const field={value,dataset:{extractQuestion:source.id,candidate:id},closest:selector=>selector==='[data-extract-question]'?field:null};listeners.input({target:field});};
   const click=(selector,button)=>listeners.click({target:{closest:query=>query===selector?button:null}});
-  return {source,calls,extraction,input,click};
+  return {source,calls,extraction,input,edit,click};
 }
+
+test('reviews one candidate at a time and keeps edits when navigating', async () => {
+  const h=harness(); h.input('问题一原文。问题二原文。');
+  const pending=h.click('[data-extract-run]',{dataset:{extractRun:h.source.id}});
+  h.calls[0].resolve({items:[{id:'one',question:'问题一',evidence:'问题一原文'},{id:'two',question:'问题二',evidence:'问题二原文'}],omitted:0}); await pending;
+  let html=h.extraction.render(h.source);
+  assert.match(html,/候选题 1 \/ 2/); assert.match(html,/问题一原文/); assert.doesNotMatch(html,/问题二原文<\/blockquote>/);
+  h.edit('one','修改后的问题一');
+  await h.click('[data-extract-next]',{dataset:{extractNext:h.source.id}});
+  html=h.extraction.render(h.source); assert.match(html,/候选题 2 \/ 2/); assert.match(html,/问题二原文<\/blockquote>/); assert.doesNotMatch(html,/修改后的问题一/);
+  await h.click('[data-extract-prev]',{dataset:{extractPrev:h.source.id}});
+  html=h.extraction.render(h.source); assert.match(html,/修改后的问题一/); assert.equal(h.calls.length,1);
+});
 
 test('extracting does not save until confirmation and preserves the source and evidence', async () => {
   const h=harness(), raw='面试官问：如何设计缓存？';

@@ -2,20 +2,18 @@ import http from 'node:http';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
-import { validateSource, filterByDate, normalizeAnswer } from './src/core.js';
+import { validateSource, normalizeAnswer } from './src/core.js';
 import { initializeQuestions, listSources, addQuestion, addExtractedQuestion, editQuestion, removeQuestion, removeSource, setQuestionTopic } from './src/questions.js';
 import { initializeWorkspace, getProfile, saveProfile, getDraft, saveDraft, saveDebrief, setDebriefLibrary, setQuestionNote, setInterviewDate, exportData, setAssessment, recommendQuestion } from './src/workspace.js';
-import { searchRequests, dedupeSearchResults, searchSource, searchPublishedDate, parseRequirements, parseReview, parsePracticeHelp } from './src/services.js';
-import { assessSearchAiRelevance } from './src/search-ai-relevance.js';
+import { parseRequirements, parseReview, parsePracticeHelp } from './src/services.js';
 import { importData } from './src/import-data.js';
 import { isAllowedRequest } from './src/request-security.js';
 import { validateQuestionRef } from './src/question-identity.js';
-import { filterSearchRelevance } from './src/search-relevance.js';
-import { partitionSearchResults } from './src/search-quality.js';
 import { roleCoaching } from './src/coaching.js';
 import { validateRoleInput, parseRoleJudgment, roleValidationStatus, saveValidatedRole } from './src/role-validation.js';
 import { validateSourceText, isVerifiableEvidence, parseSourceCandidates } from './src/source-extraction.js';
 import { createDialogueApi, readDialogue } from './src/dialogue.js';
+import { createInterviewResearch } from './src/interview-research.js';
 
 await mkdir('data', {recursive:true});
 const db = new DatabaseSync('data/interview.sqlite');
@@ -29,6 +27,16 @@ const currentRole = () => db.prepare("SELECT value FROM settings WHERE key='role
 // DeepSeek Flash defaults to thinking mode; use its non-thinking mode for short reviews.
 const aiRequestOptions = base => new URL(base).hostname === 'api.deepseek.com' ? {thinking:{type:'disabled'}} : {};
 const dialogueApi = createDialogueApi({db,currentRole,getProfile,aiRequestOptions});
+const research = createInterviewResearch({
+  tavilyKey:process.env.TAVILY_API_KEY,
+  exaKey:process.env.EXA_API_KEY,
+  requestAi:process.env.AI_API_KEY && process.env.AI_MODEL ? async ({messages,response_format,signal}) => {
+    const base=(process.env.AI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/,'');
+    const response=await fetch(`${base}/chat/completions`,{method:'POST',signal,headers:{'content-type':'application/json','authorization':`Bearer ${process.env.AI_API_KEY}`},body:JSON.stringify({...aiRequestOptions(base),model:process.env.AI_MODEL,response_format,messages,temperature:0})});
+    if(!response.ok) throw Error('AI 相关性判断暂不可用');
+    return (await response.json()).choices?.[0]?.message?.content;
+  } : undefined
+});
 const roleConfirmations = new Map();
 let roleRequestRevision = 0;
 async function assessRole(role) {
@@ -42,7 +50,7 @@ async function assessRole(role) {
   } catch { return 'uncertain'; }
 }
 async function api(req,res,path) {
-  if(path==='/api/state' && req.method==='GET') { const role=currentRole(); return json(res,200,{role,roleCoaching:roleCoaching(role),roleValidation:roleValidationStatus(db,role),...getProfile(db,role),draft:getDraft(db,role),debriefs:db.prepare("SELECT d.*, COALESCE(t.topic,'') AS topic FROM debriefs d LEFT JOIN question_topics t ON t.kind='debrief' AND t.question_id=d.id ORDER BY d.created DESC").all(),sources:listSources(db), attempts:db.prepare("SELECT a.*, aa.rating, l.kind AS question_link_kind, l.question_id AS question_link_id, CASE WHEN l.kind='source' THEN EXISTS(SELECT 1 FROM questions q JOIN sources s ON s.id=q.source_id WHERE q.id=l.question_id AND s.role=a.role) WHEN l.kind='debrief' THEN EXISTS(SELECT 1 FROM debriefs d WHERE d.id=l.question_id AND d.role=a.role) WHEN l.kind IN ('missing_source','missing_debrief') THEN 0 ELSE NULL END AS question_link_available FROM attempts a LEFT JOIN attempt_assessments aa ON aa.attempt_id=a.id LEFT JOIN attempt_question_links l ON l.attempt_id=a.id ORDER BY a.created DESC LIMIT 30").all(),searchConfigured:!!process.env.TAVILY_API_KEY,aiConfigured:!!(process.env.AI_API_KEY && process.env.AI_MODEL)}); }
+  if(path==='/api/state' && req.method==='GET') { const role=currentRole(); return json(res,200,{role,roleCoaching:roleCoaching(role),roleValidation:roleValidationStatus(db,role),...getProfile(db,role),draft:getDraft(db,role),debriefs:db.prepare("SELECT d.*, COALESCE(t.topic,'') AS topic FROM debriefs d LEFT JOIN question_topics t ON t.kind='debrief' AND t.question_id=d.id ORDER BY d.created DESC").all(),sources:listSources(db), attempts:db.prepare("SELECT a.*, aa.rating, l.kind AS question_link_kind, l.question_id AS question_link_id, CASE WHEN l.kind='source' THEN EXISTS(SELECT 1 FROM questions q JOIN sources s ON s.id=q.source_id WHERE q.id=l.question_id AND s.role=a.role) WHEN l.kind='debrief' THEN EXISTS(SELECT 1 FROM debriefs d WHERE d.id=l.question_id AND d.role=a.role) WHEN l.kind IN ('missing_source','missing_debrief') THEN 0 ELSE NULL END AS question_link_available FROM attempts a LEFT JOIN attempt_assessments aa ON aa.attempt_id=a.id LEFT JOIN attempt_question_links l ON l.attempt_id=a.id ORDER BY a.created DESC LIMIT 30").all(),searchConfigured:research.providers.length>0,searchProviders:research.providers,aiConfigured:!!(process.env.AI_API_KEY && process.env.AI_MODEL)}); }
   if(path==='/api/role' && req.method==='POST') {
     const x=await body(req), revision=++roleRequestRevision, role=validateRoleInput(x.role), previousRole=currentRole();
     for (const [token, item] of roleConfirmations) if (item.expires < Date.now()) roleConfirmations.delete(token);
@@ -162,49 +170,11 @@ async function api(req,res,path) {
   const sourcePath = path.match(/^\/api\/sources\/([^/]+)$/);
   if(sourcePath && req.method==='DELETE') { removeSource(db,sourcePath[1]); return json(res,200,{ok:true}); }
   if(path==='/api/search' && req.method==='POST') {
-    if(!process.env.TAVILY_API_KEY) return json(res,503,{error:'应用内搜索需要 Tavily：请在项目 .env 中配置 TAVILY_API_KEY 并重启服务；也可以手动添加来源。'});
+    if(!research.providers.length) return json(res,503,{error:'尚未配置搜索服务，请配置 TAVILY_API_KEY 或 EXA_API_KEY 并重启，也可以手动添加来源。'});
     const x=await body(req), role=String(x.role||'').trim(); if(!role) throw Error('请先填写目标岗位');
     if(role!==currentRole() || !['valid','confirmed'].includes(roleValidationStatus(db,role))) throw Error('当前目标岗位尚未核对，请到岗位设置确认后再搜索');
-    const source=x.source || 'all', company=String(x.company || '').trim();
-    const queries=searchRequests(role,company,'',x.range || 'year',new Date(),source);
-    const attempts=await Promise.allSettled(queries.map(async query=>{
-      const response=await fetch('https://api.tavily.com/search',{method:'POST',signal:AbortSignal.timeout(30000),headers:{'content-type':'application/json','authorization':`Bearer ${process.env.TAVILY_API_KEY}`},body:JSON.stringify(query)});
-      if(!response.ok) throw Error(response.status===401 || response.status===403 ? 'Tavily 密钥无效或无权限，请检查 TAVILY_API_KEY' : response.status===429 || response.status===432 ? 'Tavily 请求受限或额度不足，请检查服务额度后重试' : 'Tavily 搜索服务暂不可用，请稍后再试');
-      const data=await response.json();
-      if(!Array.isArray(data.results)) throw Error('搜索服务返回格式无效');
-      return data.results;
-    }));
-    const successes=attempts.filter(item=>item.status==='fulfilled'), partial_failure=successes.length<queries.length;
-    if(!successes.length) throw Error(attempts[0].reason?.message || '搜索服务暂不可用，请稍后重试');
-    const names={nowcoder:'牛客',juejin:'掘金',zhihu:'知乎',csdn:'CSDN',cnblogs:'博客园','51cto':'51CTO',segmentfault:'SegmentFault'};
-    const candidates=successes.flatMap(item=>item.value).map(r=>{const url=String(r.url||''), site=searchSource(url); return {title:String(r.title||''),url,snippet:String(r.content||''),date:searchPublishedDate(r.published_date),site,platform:names[site]||''};}).filter(r=>r.site && (source==='all' || r.site===source));
-    const dated=queries[0].start_date ? filterByDate(candidates,queries[0].start_date).filter(r => r.date <= new Date().toISOString().slice(0,10)) : candidates;
-    const relevant=filterSearchRelevance(role,dedupeSearchResults(dated),{company});
-    let matched=relevant.results, unverified=relevant.unverified, aiWarning='';
-    if(x.ai_relevance===true) {
-      const all=[...matched,...unverified];
-      if(!process.env.AI_API_KEY || !process.env.AI_MODEL) {
-        matched=[];
-        unverified=all.map(result=>({...result,ai_relevance:'uncertain',ai_evidence:null}));
-        aiWarning='AI 相关性判断未配置，所有结果均待核实。';
-      } else {
-        const base=(process.env.AI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/,'');
-        const assessment=await assessSearchAiRelevance({enabled:true,role,company,results:all,request:async ({messages,response_format,signal})=>{
-          const response=await fetch(`${base}/chat/completions`,{method:'POST',signal,headers:{'content-type':'application/json','authorization':`Bearer ${process.env.AI_API_KEY}`},body:JSON.stringify({...aiRequestOptions(base),model:process.env.AI_MODEL,response_format,messages,temperature:0})});
-          if(!response.ok) throw Error('AI 相关性判断暂不可用');
-          return (await response.json()).choices?.[0]?.message?.content;
-        }});
-        matched=[]; unverified=[];
-        for(const item of assessment.items) {
-          const {index,status,...evidence}=item;
-          const result={...all[index],ai_relevance:status,ai_evidence:status==='uncertain'?null:evidence};
-          (status==='related'?matched:unverified).push(result);
-        }
-        aiWarning=assessment.warning;
-      }
-    }
-    const notice=(partial_failure?'部分检索失败，结果不完整，可重试。 ':'') + (queries[0].start_date?'已隐藏日期未知或不在范围内的结果；可尝试不限时间。日期由搜索服务提供，需核实原帖。':'日期由搜索服务提供，需核实原帖。') + (x.ai_relevance===true?' AI 判断仅供参考，仍需核实原帖。':' 已按标题中的岗位关键词和面试线索初筛，相关性仍需核实。') + (relevant.filtered ? ` 已隐藏 ${relevant.filtered} 条标题明显偏向 Java 或后端的结果。` : '') + (aiWarning ? ` ${aiWarning}` : '');
-    return json(res,200,{...partitionSearchResults(matched,unverified),notice,partial_failure});
+    const {unavailable,...result}=await research.search({role,company:String(x.company || '').trim(),source:x.source || 'all',range:x.range || 'year',useAi:x.ai_relevance===true});
+    return json(res,unavailable ? 502 : 200,result);
   }
   if(path==='/api/practice/help' && req.method==='POST') {
     if(!process.env.AI_API_KEY || !process.env.AI_MODEL) return json(res,503,{error:'尚未配置 AI 服务，暂时无法获取帮助。'});

@@ -33,7 +33,7 @@ export function searchPublishedDate(value) {
 
 export function searchRequests(role, company, requirements, range, now = new Date(), source = 'all') {
   const months = { '3m': 3, '6m': 6, year: 12 };
-  if (range !== 'all' && !months[range]) throw Error('不支持的时间范围');
+  if (range !== 'all' && !Object.hasOwn(months, range)) throw Error('不支持的时间范围');
   if (source !== 'all' && !Object.hasOwn(SEARCH_SOURCES, source)) throw Error('不支持的搜索来源');
   const roleText = String(role || '').trim();
   if (!roleText) throw Error('请先填写目标岗位');

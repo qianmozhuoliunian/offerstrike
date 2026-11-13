@@ -279,11 +279,11 @@
           </form>
 
           <label class="search-privacy"><input id="search-ai-relevance" type="checkbox" checked> 使用 AI 辅助判断相关性（产生额外 AI 调用）</label>
-          <p class="search-privacy">搜索会将目标岗位、公司、来源和时间条件发送给 Tavily，进行两路检索，不发送岗位要求。开启 AI 判断时，会将岗位、公司及公开结果的标题和摘要发送给已配置的 AI 服务；过长或判断失败的结果会标为待核实。摘要和日期均需回原帖核实。</p>
+          <p class="search-privacy">搜索服务会收到目标岗位、公司、来源和时间条件，不发送 JD 或岗位要求。两家都配置时先用 Tavily，线索较少或失败时再用 Exa；只配置一家时直接使用该服务。开启 AI 判断时，岗位、公司和公开结果的标题及摘要会发给已配置的 AI 服务；过长或判断失败的结果会标为待核实。摘要和日期需回原帖核实。</p>
 
           <div id="search-status" class="status-banner info" aria-live="polite">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-            <span>搜索结果在本页展示，需要配置 Tavily。</span>
+            <span>搜索结果在本页展示，需要配置 Tavily 或 Exa。</span>
           </div>
           <div id="results" class="results-stream"></div>
         </section>
@@ -485,8 +485,8 @@
 
             <div class="settings-row">
               <div class="settings-row-text">
-                <strong>网络搜索服务 (Tavily Search API)</strong>
-                <p>用于搜索公开资料。需配置 <code>$env:TAVILY_API_KEY</code>。</p>
+                <strong>面经搜索服务</strong>
+                <p>可配置 <code>TAVILY_API_KEY</code> 或 <code>EXA_API_KEY</code>。两者都配置时，优先用 Tavily，按需用 Exa 补搜。</p>
               </div>
               <span class="apple-pill" id="settings-search-badge">检测中...</span>
             </div>

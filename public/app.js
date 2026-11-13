@@ -14,6 +14,7 @@ import { createSourceExtraction } from './ui/source-extraction.js';
    sources: [],
    attempts: [],
    searchConfigured: false,
+   searchProviders: [],
    aiConfigured: false
  };
 
@@ -494,10 +495,10 @@ const sourceExtraction = createSourceExtraction({api, getSource:id=>state.source
    if (searchBadge) {
      if (state.searchConfigured) {
        searchBadge.className = 'apple-pill green';
-       searchBadge.textContent = '已就绪 (Tavily Search API)';
+       searchBadge.textContent = `已配置：${state.searchProviders.join('、')}`;
      } else {
        searchBadge.className = 'apple-pill gray';
-       searchBadge.textContent = '待配置 ($env:TAVILY_API_KEY)';
+       searchBadge.textContent = '待配置';
      }
    }
 
@@ -1324,6 +1325,7 @@ const sourceExtraction = createSourceExtraction({api, getSource:id=>state.source
              <article class="result-item">
                <div class="result-meta">
                  <span class="apple-pill ${platformClass}">${escapeHtml(r.platform || '外部来源')}</span>
+                 ${r.provider ? `<span class="apple-pill gray">${escapeHtml(r.provider)} 检索</span>` : ''}
                  ${r.content_hint === 'listing' ? '<span class="apple-pill match-unknown">列表页线索</span>' : (r.content_hint === 'compilation' ? '<span class="apple-pill match-unknown">疑似整理内容</span>' : (r.content_hint === 'interview_clue' ? '<span class="apple-pill match-unknown">面经线索，待核实</span>' : ''))}
                  ${r.role_match === 'unknown' ? '<span class="apple-pill match-unknown">相关性待核实</span>' : (r.role_match === 'title_keyword' ? '<span class="apple-pill match-ok">标题含岗位关键词</span>' : '')}
                  ${r.company_match === 'unknown' ? '<span class="apple-pill match-unknown">公司待核实</span>' : (r.company_match === 'title_keyword' ? '<span class="apple-pill match-ok">标题含公司词，待核实</span>' : '')}

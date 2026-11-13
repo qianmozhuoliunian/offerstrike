@@ -2935,3 +2935,45 @@ body {
   .dialogue-message { max-width: 100%; }
   .practice-submit-row > button { width: 100%; justify-content: center; }
 }
+
+/* A quiet, document-like reading surface for the practice conversation. */
+#pane-practice { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif; }
+#pane-practice .practice-page-header.page-welcome { min-height: 0; max-width: 920px; padding: 20px 4px 24px; margin-bottom: 22px; border: 0; border-bottom: 1px solid #d8dee4; border-radius: 0; background: transparent; box-shadow: none; }
+#pane-practice .practice-page-header.page-welcome::before { display: none; }
+#pane-practice .practice-page-header h1 { margin-top: 9px; font-size: clamp(26px, 3vw, 34px); letter-spacing: -.02em; }
+#pane-practice .practice-page-header .title-keyword, #pane-practice .practice-card-header .section-keyword { padding: 0; background: transparent; }
+#pane-practice .practice-page-header > p { font-size: 15px; }
+#pane-practice .practice-layout > .practice-compose { padding: 0; border: 1px solid #d0d7de; border-radius: 8px; background: #fff; box-shadow: none; }
+#pane-practice .practice-card-header { align-items: center; margin: 0; padding: 16px 24px; border-bottom: 1px solid #d8dee4; background: #f6f8fa; }
+#pane-practice .practice-card-header h2 { margin: 0; font-size: 18px; }
+#pane-practice .practice-step-icon { width: 32px; height: 32px; border-radius: 6px; color: #57606a; background: #fff; border: 1px solid #d0d7de; }
+#pane-practice .practice-step-icon svg { width: 17px; height: 17px; }
+#pane-practice .practice-compose .apple-form-vertical { max-width: 80ch; margin: 0 auto; padding: 26px 28px 30px; gap: 22px; }
+#pane-practice .practice-compose label { font-size: 15px; }
+#pane-practice .practice-compose textarea { background: #fff; border-color: #afb8c1; border-radius: 6px; color: #1f2328; font: inherit; font-size: 16px; line-height: 1.7; }
+#pane-practice .practice-compose textarea:focus-visible { outline: 2px solid #0969da; outline-offset: 2px; }
+#pane-practice .recommendation-choice, #pane-practice .practice-help { border-color: #d8dee4; border-radius: 6px; background: #f6f8fa; }
+#pane-practice .recommendation-choice p, #pane-practice .practice-help-heading span, #pane-practice .practice-help-privacy { font-size: 14px; line-height: 1.7; }
+#pane-practice .role-coaching-focus { border-color: #afb8c1; background: #f6f8fa; font-size: 14px; }
+#pane-practice .dialogue-stream { gap: 0; padding: 0; border: 1px solid #d0d7de; border-radius: 6px; background: #fff; overflow-wrap: anywhere; }
+#pane-practice .dialogue-empty { padding: 16px 18px; color: #57606a; font-size: 14px; }
+#pane-practice .dialogue-message { width: 100%; max-width: none; padding: 18px 20px; border: 0; border-radius: 0; background: #fff; }
+#pane-practice .dialogue-message + .dialogue-message, #pane-practice .dialogue-history + .dialogue-message, #pane-practice .dialogue-message + .review-assessment { border-top: 1px solid #d8dee4; }
+#pane-practice .dialogue-message--answer { justify-self: stretch; background: #f6f8fa; }
+#pane-practice .dialogue-message--summary { border-left: 4px solid #2da44e; }
+#pane-practice .dialogue-message strong { margin-bottom: 8px; color: #57606a; font-size: 13px; }
+#pane-practice .dialogue-message p { color: #1f2328; font-size: 16px; line-height: 1.8; }
+#pane-practice .dialogue-history { padding: 4px 20px; }
+#pane-practice .dialogue-history-content { gap: 0; border-top: 1px solid #d8dee4; }
+#pane-practice .dialogue-history-content .dialogue-message { padding-left: 0; padding-right: 0; }
+#pane-practice .dialogue-message--feedback .coaching-evidence { border-color: #afb8c1; background: #f6f8fa; }
+#pane-practice .review-assessment { padding: 16px 20px; }
+#pane-practice .practice-question-action { min-height: 38px; font-size: 13px; }
+#pane-practice .privacy-callout { font-size: 13px; line-height: 1.7; }
+@media (max-width: 640px) {
+  #pane-practice .practice-page-header.page-welcome { padding: 14px 2px 20px; }
+  #pane-practice .practice-card-header { padding: 14px 16px; }
+  #pane-practice .practice-compose .apple-form-vertical { padding: 20px 16px 24px; }
+  #pane-practice .dialogue-message { padding: 16px; }
+  #pane-practice .dialogue-history { padding: 4px 16px; }
+}

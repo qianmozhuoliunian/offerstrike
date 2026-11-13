@@ -13,6 +13,8 @@ npm test
 
 服务仅监听本机。启动后请打开终端显示的地址；默认尝试 8080，端口不可用时会尝试其他端口。修改服务端代码或环境变量后需要重新启动服务。
 
+可以选择用 FastAPI 执行 Tavily / Exa 检索，页面和 SQLite 仍由 Node 管理。双进程启动和回退方法见 [FastAPI 研究接口](research_service/README.md)。
+
 ## 项目结构
 
 - `server.js`：本机 HTTP 入口、接口路由和静态资源加载。

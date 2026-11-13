@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createInterviewResearch } from '../src/interview-research.js';
+import { createFastApiRetrieval } from '../src/fastapi-retrieval.js';
 
 const now = new Date('2026-11-13T12:00:00Z');
 const target = {role:'产品经理', company:'示例公司', source:'nowcoder', range:'3m', now};
@@ -73,4 +74,39 @@ test('handles failed providers, Exa alone, and the unlimited date range', async 
   await assert.rejects(research.search({...target,range:'invalid'}),/时间范围/);
   await assert.rejects(research.search({...target,range:'constructor'}),/时间范围/);
   assert.equal(calls.length,1);
+});
+
+test('the FastAPI path sends only search scope, preserves fallback and does not call providers directly', async () => {
+  const calls = [];
+  let serviceDown = false;
+  const retrieve = createFastApiRetrieval('http://127.0.0.1:8091', async (url, options) => {
+    assert.equal(String(url), 'http://127.0.0.1:8091/v1/retrieve');
+    assert.equal(options.redirect, 'error');
+    const query = JSON.parse(options.body);
+    calls.push(query);
+    if (serviceDown || query.provider === 'Tavily') return Response.json({detail:'unavailable'}, {status:502});
+    return Response.json({results:[
+      {title:post(1).title, url:post(1).url, published_date:'2026-11-01', snippet:'公开摘要'},
+      {title:post(1).title, url:'https://example.com/not-allowed', published_date:'2026-11-01'},
+      null
+    ]});
+  });
+  let direct = 0;
+  const research = createInterviewResearch({tavilyKey:'private-key', exaKey:'another-key', retrieve,
+    fetcher:async () => { direct++; throw Error('unexpected direct fetch'); }});
+  const result = await research.search({...target, jd:'private-jd'});
+  assert.equal(result.results.length, 1);
+  assert.equal(result.results[0].provider, 'Exa');
+  assert.equal(result.retrieval.engine, 'fastapi');
+  assert.equal(result.retrieval.fallback_reason, 'unavailable');
+  assert.deepEqual(calls, ['面经','面试经验','面试经历'].map((phrase, index) => ({
+    provider:index === 2 ? 'Exa' : 'Tavily', role:'产品经理', company:'示例公司',
+    domains:['nowcoder.com'], phrase, from_date:'2026-08-13', through_date:'2026-11-13'
+  })));
+  serviceDown = true;
+  const failure = await research.search(target);
+  assert.equal(failure.unavailable, true);
+  assert.match(failure.error, /FastAPI 已启动/);
+  assert.equal(direct, 0);
+  assert.throws(() => createFastApiRetrieval('http://example.com:8091'), /本机地址/);
 });

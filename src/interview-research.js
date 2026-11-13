@@ -19,19 +19,27 @@ async function fetchCandidates(fetcher, provider, key, request) {
   if (!response.ok) throw Error(`${provider} 检索失败`);
   const data = await response.json();
   if (!Array.isArray(data?.results)) throw Error(`${provider} 返回格式无效`);
-  return data.results.flatMap(item => {
+  return data.results.map(item => ({
+    title:item?.title, url:item?.url,
+    snippet:exa ? (Array.isArray(item?.highlights) ? item.highlights.filter(h => typeof h === 'string').join(' … ') : '') : item?.content,
+    published_date:exa ? item?.publishedDate : item?.published_date
+  }));
+}
+
+function normalizeCandidates(rows, provider) {
+  return rows.flatMap(item => {
     const url = item?.url;
     const site = typeof url === 'string' && searchSource(url);
     if (!site || typeof item.title !== 'string' || !item.title.trim()) return [];
-    const snippet = exa ? (Array.isArray(item.highlights) ? item.highlights.filter(h => typeof h === 'string').join(' … ') : '') : item.content;
+    const snippet = item.snippet;
     return [{title:item.title, url, snippet:typeof snippet === 'string' ? snippet : '',
-      date:searchPublishedDate(exa ? item.publishedDate : item.published_date), site, platform:platforms[site], provider}];
+      date:searchPublishedDate(item.published_date), site, platform:platforms[site], provider}];
   });
 }
 
 // The caller supplies public search terms only. This module neither reads the
 // workspace nor saves research results as verified sources or questions.
-export function createInterviewResearch({tavilyKey, exaKey, fetcher = fetch, requestAi}) {
+export function createInterviewResearch({tavilyKey, exaKey, fetcher = fetch, requestAi, retrieve}) {
   const providers = [...(tavilyKey ? ['Tavily'] : []), ...(exaKey ? ['Exa'] : [])];
   return {
     providers,
@@ -43,11 +51,14 @@ export function createInterviewResearch({tavilyKey, exaKey, fetcher = fetch, req
       const started = performance.now(), used = [];
       let requests = 0, failures = 0, fallbackReason = null;
       const candidates = [];
-      const run = async (provider, key, plans) => {
+      const run = async (provider, key, plans, phrases) => {
         used.push(provider);
         requests += plans.length;
-        for (const result of await Promise.allSettled(plans.map(plan => fetchCandidates(fetcher, provider, key, plan)))) {
-          if (result.status === 'fulfilled') candidates.push(...result.value);
+        const outcomes = await Promise.allSettled(plans.map((plan, index) => retrieve
+          ? retrieve({provider, role, company, domains, phrase:phrases[index], from, today})
+          : fetchCandidates(fetcher, provider, key, plan)));
+        for (const result of outcomes) {
+          if (result.status === 'fulfilled') candidates.push(...normalizeCandidates(result.value, provider));
           else failures++;
         }
       };
@@ -57,7 +68,7 @@ export function createInterviewResearch({tavilyKey, exaKey, fetcher = fetch, req
         return filterSearchRelevance(role, dedupeSearchResults(dated), {company});
       };
 
-      if (tavilyKey) await run('Tavily', tavilyKey, queries);
+      if (tavilyKey) await run('Tavily', tavilyKey, queries, ['面经', '面试经验']);
       const clues = shortlist().results.filter(item => searchContentHint(item) === 'interview_clue').length;
       if (exaKey && (!tavilyKey || clues < MIN_CLUES)) {
         if (tavilyKey) fallbackReason = failures === requests ? 'unavailable' : 'insufficient_clues';
@@ -65,11 +76,14 @@ export function createInterviewResearch({tavilyKey, exaKey, fetcher = fetch, req
           query:[role, company, '面试经历'].filter(Boolean).join(' '),
           type:'auto', numResults:10, includeDomains:domains, contents:{highlights:true},
           ...(from ? {startPublishedDate:`${from}T00:00:00.000Z`, endPublishedDate:`${today}T23:59:59.999Z`} : {})
-        }]);
+        }], ['面试经历']);
       }
-      const retrieval = {providers:used, fallback_reason:fallbackReason, requests, duration_ms:Math.round(performance.now()-started)};
+      const retrieval = {providers:used, fallback_reason:fallbackReason, requests, duration_ms:Math.round(performance.now()-started),
+        ...(retrieve ? {engine:'fastapi'} : {})};
       if (failures === requests) return {unavailable:true, retrieval,
-        error:`${used.join(' 和 ')} 检索失败，请检查网络、密钥和服务额度后重试，也可以手动添加来源。`};
+        error:retrieve
+          ? 'Python 研究服务未能完成检索，请确认 FastAPI 已启动，并检查搜索密钥、网络和服务额度。也可以手动添加来源。'
+          : `${used.join(' 和 ')} 检索失败，请检查网络、密钥和服务额度后重试，也可以手动添加来源。`};
 
       const relevant = shortlist();
       let {results:matched, unverified} = relevant, aiWarning = '';
@@ -90,6 +104,7 @@ export function createInterviewResearch({tavilyKey, exaKey, fetcher = fetch, req
         }
       }
       const notice = [
+        retrieve ? '本次由 Python 研究服务执行检索。' : '',
         fallbackReason === 'unavailable' ? 'Tavily 检索失败，已改用 Exa。' : '',
         fallbackReason === 'insufficient_clues' ? 'Tavily 初筛线索较少，已用 Exa 补搜。' : '',
         `本次使用 ${used.join('、')}，共 ${requests} 次检索请求。`,

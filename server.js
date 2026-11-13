@@ -14,6 +14,7 @@ import { validateRoleInput, parseRoleJudgment, roleValidationStatus, saveValidat
 import { validateSourceText, isVerifiableEvidence, parseSourceCandidates } from './src/source-extraction.js';
 import { createDialogueApi, readDialogue } from './src/dialogue.js';
 import { createInterviewResearch } from './src/interview-research.js';
+import { createFastApiRetrieval } from './src/fastapi-retrieval.js';
 
 await mkdir('data', {recursive:true});
 const db = new DatabaseSync('data/interview.sqlite');
@@ -30,6 +31,7 @@ const dialogueApi = createDialogueApi({db,currentRole,getProfile,aiRequestOption
 const research = createInterviewResearch({
   tavilyKey:process.env.TAVILY_API_KEY,
   exaKey:process.env.EXA_API_KEY,
+  retrieve:process.env.RESEARCH_SERVICE_URL ? createFastApiRetrieval(process.env.RESEARCH_SERVICE_URL) : undefined,
   requestAi:process.env.AI_API_KEY && process.env.AI_MODEL ? async ({messages,response_format,signal}) => {
     const base=(process.env.AI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/,'');
     const response=await fetch(`${base}/chat/completions`,{method:'POST',signal,headers:{'content-type':'application/json','authorization':`Bearer ${process.env.AI_API_KEY}`},body:JSON.stringify({...aiRequestOptions(base),model:process.env.AI_MODEL,response_format,messages,temperature:0})});

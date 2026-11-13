@@ -2747,8 +2747,8 @@ body { background: var(--lens-bg); }
 }
 .tab-pane h2 { font-weight: 700; }
 .title-keyword {
-  color: #192a20;
-  background: #d2ef82;
+  color: #1c3d8f;
+  background: #dbe7ff;
   border-radius: .1em;
   padding: .01em .1em .04em;
   margin: 0 .025em;
@@ -2757,7 +2757,7 @@ body { background: var(--lens-bg); }
 }
 .section-keyword {
   color: inherit;
-  background: linear-gradient(transparent 63%, #e2efbd 63%);
+  background: linear-gradient(transparent 63%, #cdddfb 63%);
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
@@ -2772,7 +2772,7 @@ body { background: var(--lens-bg); }
   padding: 28px 32px;
   border: 1px solid #e0e8f2;
   border-radius: 16px;
-  background: linear-gradient(125deg, #f3f7fd 0%, #eef4fd 62%, #e7f0ee 100%);
+  background: linear-gradient(125deg, #f5f8fe 0%, #eef3fc 100%);
 }
 .workspace-eyebrow {
   display: flex;
@@ -2800,7 +2800,7 @@ body { background: var(--lens-bg); }
   z-index: -1;
   inset: 12% -6% 4%;
   border-radius: 45% 10% 38% 12% / 22% 18% 24% 15%;
-  background: #d2ef82;
+  background: #d8e5ff;
   transform: rotate(-3deg);
 }
 .workspace-spark { position: absolute; top: -.2em; right: -.35em; width: .38em; height: .38em; color: #315cc4; }
@@ -2813,14 +2813,14 @@ body { background: var(--lens-bg); }
 
 /* Warm, quiet surfaces keep the workbench welcoming and the forms readable. */
 body {
-  background: radial-gradient(ellipse at 82% 3%, #f8f1e6 0, transparent 42%),
-    radial-gradient(ellipse at 20% 90%, #edf3f2 0, transparent 42%), #f5f7fa;
+  background: radial-gradient(ellipse at 82% 3%, #f8f4ec 0, transparent 42%),
+    radial-gradient(ellipse at 20% 90%, #eef3fa 0, transparent 42%), #f5f7fa;
   background-attachment: fixed;
 }
 .workspace-intro {
   min-height: 260px;
-  background: linear-gradient(115deg, #f9f8f1 0%, #edf4f2 100%);
-  border-color: #e7e9dc;
+  background: linear-gradient(115deg, #f8fafd 0%, #eef3fa 100%);
+  border-color: #dfe6f1;
 }
 .workspace-art {
   position: absolute;
@@ -2834,8 +2834,8 @@ body {
   -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 34%);
   mask-image: linear-gradient(to right, transparent 0%, #000 34%);
 }
-.workspace-summary { background: #fffefa; border-color: #e9e8df; box-shadow: 0 9px 28px rgba(76, 83, 78, .06); }
-.feature-card[data-tab="practice"], .feature-card[data-tab="library"] { background: #fffefa; box-shadow: 0 8px 24px rgba(76, 83, 78, .045); }
+.workspace-summary { background: #fff; border-color: #dfe6f1; box-shadow: 0 9px 28px rgba(31, 51, 82, .06); }
+.feature-card[data-tab="practice"], .feature-card[data-tab="library"] { background: #fff; box-shadow: 0 8px 24px rgba(31, 51, 82, .045); }
 @media (max-width: 640px) {
   .workspace-intro { padding-bottom: 22px; }
   .workspace-art {
@@ -2859,9 +2859,9 @@ body {
   min-width: 0;
   min-height: 150px;
   padding: 24px 30px;
-  border: 1px solid #e7e9dc;
+  border: 1px solid #dfe6f1;
   border-radius: 16px;
-  background: linear-gradient(115deg, #f9f8f1 0%, #edf4f2 100%);
+  background: linear-gradient(115deg, #f8fafd 0%, #eef3fa 100%);
 }
 .page-welcome--discover { --welcome-art: url('/assets/interview-discover.png'); }
 .page-welcome--practice { --welcome-art: url('/assets/interview-practice.png'); }
@@ -2885,9 +2885,9 @@ body {
 .library-page-header.page-welcome .library-add { position: relative; }
 .practice-layout > .card, .role-target-panel, .role-jd-panel,
 #pane-search > .panel-card, #pane-settings > .panel-card, .debrief-page .card {
-  background: #fffefa;
+  background: #fff;
 }
-.library-scope-bar { background: #f3f6f1; }
+.library-scope-bar { background: #f1f5fb; }
 @media (max-width: 640px) {
   .page-welcome { min-height: 135px; padding: 22px 24px; }
   .page-welcome::before { width: 48%; opacity: .28; }
@@ -2898,13 +2898,13 @@ body {
 /* Practice stays in one conversation instead of splitting answers and feedback. */
 .practice-layout { display: block; max-width: 920px; }
 .practice-card-header { margin-bottom: 20px; }
-.dialogue-stream { display: grid; gap: 14px; padding: 18px; border: 1px solid #e7e9dc; border-radius: 14px; background: #f8f8f2; }
+.dialogue-stream { display: grid; gap: 14px; padding: 18px; border: 1px solid #dfe6f1; border-radius: 14px; background: #f6f8fc; }
 .dialogue-empty { color: var(--lens-text-secondary); font-size: 14px; line-height: 1.7; }
-.dialogue-message { max-width: 88%; padding: 12px 15px; border-radius: 14px; background: #fffefa; border: 1px solid #e8e8dd; overflow-wrap: anywhere; }
+.dialogue-message { max-width: 88%; padding: 12px 15px; border-radius: 14px; background: #fff; border: 1px solid #dfe6f1; overflow-wrap: anywhere; }
 .dialogue-message strong { display: block; margin-bottom: 5px; color: #536681; font-size: 12px; }
 .dialogue-message p { margin: 0; white-space: pre-wrap; color: var(--lens-text-primary); font-size: 14px; line-height: 1.7; }
 .dialogue-message--answer { justify-self: end; background: #edf2ff; border-color: #dce5f8; }
-.dialogue-message--summary { background: #f3f6e8; border-color: #dfe8c9; }
+.dialogue-message--summary { background: #f2f8f4; border-color: #d3e5da; }
 .dialogue-history { color: var(--lens-text-secondary); font-size: 13px; }
 .dialogue-history summary, .coaching-details summary { cursor: pointer; color: var(--lens-primary); font-weight: 600; padding: 10px 0; }
 .dialogue-history-content { display: grid; gap: 12px; margin: 8px 0 16px; }
@@ -2919,10 +2919,10 @@ body {
 .candidate-hint { margin: 10px 0 0; color: var(--lens-text-secondary); font-size: 13px; }
 .dialogue-history summary:focus-visible, .coaching-details summary:focus-visible { outline: 3px solid #83a8f5; outline-offset: 2px; }
 .dialogue-message--feedback, .dialogue-message--summary { scroll-margin-top: 85px; }
-.role-coaching-focus { margin: 0; padding: 10px 12px; border-left: 3px solid #91ad53; color: var(--lens-text-secondary); background: #f5f8ed; line-height: 1.6; font-size: 13px; }
+.role-coaching-focus { margin: 0; padding: 10px 12px; border-left: 3px solid #7d9bd8; color: var(--lens-text-secondary); background: #f2f6fd; line-height: 1.6; font-size: 13px; }
 .dialogue-message--feedback > p + p { margin-top: 9px; }
 .dialogue-message--feedback p b { color: #536681; font-size: 12px; margin-right: 5px; }
-.dialogue-message--feedback .coaching-evidence { padding: 8px 10px; border-left: 3px solid #b6c89b; background: #f6f8ee; }
+.dialogue-message--feedback .coaching-evidence { padding: 8px 10px; border-left: 3px solid #a9bfe8; background: #f2f6fd; }
 .dialogue-message--feedback .coaching-unverified { color: var(--lens-text-secondary); font-size: 12px; }
 .coaching-action { display: grid; justify-items: start; gap: 8px; margin-top: 14px; }
 .coaching-action .practice-question-action { min-height: 44px; }

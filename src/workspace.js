@@ -19,6 +19,7 @@ export function initializeWorkspace(db) {
     CREATE TABLE IF NOT EXISTS draft_question_links (role TEXT PRIMARY KEY, kind TEXT NOT NULL, question_id TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS dialogue_origins (attempt_id TEXT PRIMARY KEY, origin TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS dialogue_summaries (attempt_id TEXT PRIMARY KEY, summary TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS dialogue_coaching (attempt_id TEXT PRIMARY KEY, focus TEXT NOT NULL, evidence TEXT NOT NULL, next_step TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS dialogue_requests (request_id TEXT PRIMARY KEY, attempt_id TEXT NOT NULL);`);
 }
 
@@ -99,7 +100,7 @@ export function setInterviewDate(db, sourceId, value) {
   return {interview_date:date};
 }
 export function exportData(db) {
-  return {version:1, exported_at:new Date().toISOString(), settings:db.prepare("SELECT key,value FROM settings WHERE key='role'").all(), profiles:db.prepare('SELECT role,jd,confirmed_requirements FROM job_profiles').all(), sources:listSources(db), attempts:db.prepare('SELECT * FROM attempts ORDER BY created DESC').all(), drafts:db.prepare('SELECT role,question,answer,updated FROM drafts').all(), debriefs:db.prepare("SELECT d.*,COALESCE(t.topic,'') AS topic FROM debriefs d LEFT JOIN question_topics t ON t.kind='debrief' AND t.question_id=d.id ORDER BY d.created DESC").all(), assessments:db.prepare('SELECT attempt_id,rating FROM attempt_assessments').all(), attempt_details:db.prepare('SELECT * FROM attempt_details').all(), draft_contexts:db.prepare('SELECT * FROM draft_contexts').all(), attempt_question_links:db.prepare('SELECT * FROM attempt_question_links').all(), draft_question_links:db.prepare('SELECT * FROM draft_question_links').all(), dialogue_origins:db.prepare('SELECT * FROM dialogue_origins').all(), dialogue_summaries:db.prepare('SELECT * FROM dialogue_summaries').all(), dialogue_requests:db.prepare('SELECT * FROM dialogue_requests').all()};
+  return {version:1, exported_at:new Date().toISOString(), settings:db.prepare("SELECT key,value FROM settings WHERE key='role'").all(), profiles:db.prepare('SELECT role,jd,confirmed_requirements FROM job_profiles').all(), sources:listSources(db), attempts:db.prepare('SELECT * FROM attempts ORDER BY created DESC').all(), drafts:db.prepare('SELECT role,question,answer,updated FROM drafts').all(), debriefs:db.prepare("SELECT d.*,COALESCE(t.topic,'') AS topic FROM debriefs d LEFT JOIN question_topics t ON t.kind='debrief' AND t.question_id=d.id ORDER BY d.created DESC").all(), assessments:db.prepare('SELECT attempt_id,rating FROM attempt_assessments').all(), attempt_details:db.prepare('SELECT * FROM attempt_details').all(), draft_contexts:db.prepare('SELECT * FROM draft_contexts').all(), attempt_question_links:db.prepare('SELECT * FROM attempt_question_links').all(), draft_question_links:db.prepare('SELECT * FROM draft_question_links').all(), dialogue_origins:db.prepare('SELECT * FROM dialogue_origins').all(), dialogue_summaries:db.prepare('SELECT * FROM dialogue_summaries').all(), dialogue_coaching:db.prepare('SELECT * FROM dialogue_coaching').all(), dialogue_requests:db.prepare('SELECT * FROM dialogue_requests').all()};
 }
 
 export function setAssessment(db, id, rating) {

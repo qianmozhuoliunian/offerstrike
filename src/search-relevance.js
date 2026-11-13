@@ -46,7 +46,7 @@ export function filterSearchRelevance(role, results, {company = ''} = {}) {
     // Provider snippets can include comments or recommendations. Company names
     // there alone do not establish that the author interviewed at that company.
     const companyInTitle = !companyText || containsKeyword(title, companyText);
-    const hasInterviewClue = interviewClue.test(`${originalTitle} ${String(result.snippet || '')}`);
+    const hasInterviewClue = interviewClue.test(originalTitle);
     const annotated = {
       ...result,
       role_match: roleInTitle && hasInterviewClue ? 'title_keyword' : 'unknown',

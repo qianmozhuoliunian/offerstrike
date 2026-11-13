@@ -11,6 +11,8 @@ import { importData } from './src/import-data.js';
 import { isAllowedRequest } from './src/request-security.js';
 import { validateQuestionRef } from './src/question-identity.js';
 import { filterSearchRelevance } from './src/search-relevance.js';
+import { partitionSearchResults } from './src/search-quality.js';
+import { roleCoaching } from './src/coaching.js';
 import { validateRoleInput, parseRoleJudgment, roleValidationStatus, saveValidatedRole } from './src/role-validation.js';
 import { createDialogueApi, readDialogue } from './src/dialogue.js';
 
@@ -39,7 +41,7 @@ async function assessRole(role) {
   } catch { return 'uncertain'; }
 }
 async function api(req,res,path) {
-  if(path==='/api/state' && req.method==='GET') { const role=currentRole(); return json(res,200,{role,roleValidation:roleValidationStatus(db,role),...getProfile(db,role),draft:getDraft(db,role),debriefs:db.prepare("SELECT d.*, COALESCE(t.topic,'') AS topic FROM debriefs d LEFT JOIN question_topics t ON t.kind='debrief' AND t.question_id=d.id ORDER BY d.created DESC").all(),sources:listSources(db), attempts:db.prepare("SELECT a.*, aa.rating, l.kind AS question_link_kind, l.question_id AS question_link_id, CASE WHEN l.kind='source' THEN EXISTS(SELECT 1 FROM questions q JOIN sources s ON s.id=q.source_id WHERE q.id=l.question_id AND s.role=a.role) WHEN l.kind='debrief' THEN EXISTS(SELECT 1 FROM debriefs d WHERE d.id=l.question_id AND d.role=a.role) WHEN l.kind IN ('missing_source','missing_debrief') THEN 0 ELSE NULL END AS question_link_available FROM attempts a LEFT JOIN attempt_assessments aa ON aa.attempt_id=a.id LEFT JOIN attempt_question_links l ON l.attempt_id=a.id ORDER BY a.created DESC LIMIT 30").all(),searchConfigured:!!process.env.TAVILY_API_KEY,aiConfigured:!!(process.env.AI_API_KEY && process.env.AI_MODEL)}); }
+  if(path==='/api/state' && req.method==='GET') { const role=currentRole(); return json(res,200,{role,roleCoaching:roleCoaching(role),roleValidation:roleValidationStatus(db,role),...getProfile(db,role),draft:getDraft(db,role),debriefs:db.prepare("SELECT d.*, COALESCE(t.topic,'') AS topic FROM debriefs d LEFT JOIN question_topics t ON t.kind='debrief' AND t.question_id=d.id ORDER BY d.created DESC").all(),sources:listSources(db), attempts:db.prepare("SELECT a.*, aa.rating, l.kind AS question_link_kind, l.question_id AS question_link_id, CASE WHEN l.kind='source' THEN EXISTS(SELECT 1 FROM questions q JOIN sources s ON s.id=q.source_id WHERE q.id=l.question_id AND s.role=a.role) WHEN l.kind='debrief' THEN EXISTS(SELECT 1 FROM debriefs d WHERE d.id=l.question_id AND d.role=a.role) WHEN l.kind IN ('missing_source','missing_debrief') THEN 0 ELSE NULL END AS question_link_available FROM attempts a LEFT JOIN attempt_assessments aa ON aa.attempt_id=a.id LEFT JOIN attempt_question_links l ON l.attempt_id=a.id ORDER BY a.created DESC LIMIT 30").all(),searchConfigured:!!process.env.TAVILY_API_KEY,aiConfigured:!!(process.env.AI_API_KEY && process.env.AI_MODEL)}); }
   if(path==='/api/role' && req.method==='POST') {
     const x=await body(req), revision=++roleRequestRevision, role=validateRoleInput(x.role), previousRole=currentRole();
     for (const [token, item] of roleConfirmations) if (item.expires < Date.now()) roleConfirmations.delete(token);
@@ -83,6 +85,7 @@ async function api(req,res,path) {
   if(path==='/api/import' && req.method==='POST') { const x=await body(req, 10000000); if(!['preview','merge'].includes(x.mode)) throw Error('导入方式无效'); return json(res,200,importData(db,x.data,x.mode==='merge')); }
   if(path==='/api/recommendation' && req.method==='POST') { const x=await body(req); return json(res,200,{question:recommendQuestion(db,x.role,x.exclude_question,x.source_preference || '')}); }
   if(path==='/api/practice/dialogue/generate' && req.method==='POST') return json(res,200,await dialogueApi.generate(await body(req)));
+  if(path==='/api/practice/dialogue/reinforce' && req.method==='POST') return json(res,200,await dialogueApi.reinforce(await body(req)));
   if(path==='/api/practice/dialogue/turn' && req.method==='POST') return json(res,200,await dialogueApi.turn(await body(req)));
   if(path==='/api/practice/dialogue/summary' && req.method==='POST') return json(res,200,await dialogueApi.summary(await body(req)));
   const dialoguePath=path.match(/^\/api\/practice\/dialogue\/([^/]+)$/);
@@ -172,7 +175,7 @@ async function api(req,res,path) {
       }
     }
     const notice=(partial_failure?'部分检索失败，结果不完整，可重试。 ':'') + (queries[0].start_date?'已隐藏日期未知或不在范围内的结果；可尝试不限时间。日期由搜索服务提供，需核实原帖。':'日期由搜索服务提供，需核实原帖。') + (x.ai_relevance===true?' AI 判断仅供参考，仍需核实原帖。':' 已按标题中的岗位关键词和面试线索初筛，相关性仍需核实。') + (relevant.filtered ? ` 已隐藏 ${relevant.filtered} 条标题明显偏向 Java 或后端的结果。` : '') + (aiWarning ? ` ${aiWarning}` : '');
-    return json(res,200,{results:matched,unverified_results:unverified,notice,partial_failure});
+    return json(res,200,{...partitionSearchResults(matched,unverified),notice,partial_failure});
   }
   if(path==='/api/practice/help' && req.method==='POST') {
     if(!process.env.AI_API_KEY || !process.env.AI_MODEL) return json(res,503,{error:'尚未配置 AI 服务，暂时无法获取帮助。'});

@@ -21,7 +21,7 @@ test('dialogue keeps full context, validates origins, retries safely and restore
     else if (system.includes('总结已有回答')) value={summary:'先明确目标，再比较优先级；继续补充验证方式。'};
     else {
       const data=JSON.parse(content);
-      value={feedback:'你的回答提出了判断依据。',follow_up:data.answer.startsWith('__round') || data.answer.startsWith('__large') ? '继续说明？' : data.previous_turns.length ? '' : '你会如何验证？'};
+      value={focus:'判断依据',evidence:data.answer.slice(0,100),next_step:'练习验证方法',feedback:'你的回答提出了判断依据。',follow_up:data.answer.startsWith('__round') || data.answer.startsWith('__large') ? '继续说明？' : data.previous_turns.length ? '' : '你会如何验证？'};
     }
     res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}));
   });

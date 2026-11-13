@@ -1,4 +1,5 @@
 import { validateSource, validateDate } from './core.js';
+import { validateStoredCoaching } from './coaching.js';
 
 // Existing records win on conflicts; validation happens before any writes.
 export function importData(db, data, commit = false) {
@@ -10,7 +11,7 @@ export function importData(db, data, commit = false) {
   if (data.draft_contexts !== undefined && (!Array.isArray(data.draft_contexts) || data.draft_contexts.length > 20000)) throw Error('备份中的追问草稿无效');
   if (data.attempt_question_links !== undefined && (!Array.isArray(data.attempt_question_links) || data.attempt_question_links.length > 20000)) throw Error('备份中的题目关联无效');
   if (data.draft_question_links !== undefined && (!Array.isArray(data.draft_question_links) || data.draft_question_links.length > 20000)) throw Error('备份中的草稿关联无效');
-  for (const name of ['dialogue_origins','dialogue_summaries','dialogue_requests']) if (data[name] !== undefined && (!Array.isArray(data[name]) || data[name].length > 20000)) throw Error(`备份中的 ${name} 无效`);
+  for (const name of ['dialogue_origins','dialogue_summaries','dialogue_coaching','dialogue_requests']) if (data[name] !== undefined && (!Array.isArray(data[name]) || data[name].length > 20000)) throw Error(`备份中的 ${name} 无效`);
   const text=(v,max,field,required=false) => {
     if (typeof v !== 'string' || v.length>max || (required && !v.trim())) throw Error(`备份中的${field}无效`);
     return v;
@@ -148,6 +149,13 @@ export function importData(db, data, commit = false) {
     const summary=text(item.summary,10000,'对话总结',true);
     if (!attemptsById.has(attemptId) || !detailsByAttempt.has(attemptId)) throw Error('对话总结缺少练习记录');
     add(!acceptedAttempts.has(attemptId) || !!db.prepare('SELECT 1 FROM dialogue_summaries WHERE attempt_id=?').get(attemptId),'INSERT INTO dialogue_summaries VALUES (?,?)',[attemptId,summary]);
+  }
+  for (const item of (data.dialogue_coaching || [])) {
+    record(item); const attemptId=id(item.attempt_id); unique('dialogue_coaching',attemptId);
+    const attempt=attemptsById.get(attemptId);
+    if (!attempt || !detailsByAttempt.has(attemptId)) throw Error('点评依据缺少练习记录');
+    const coaching=validateStoredCoaching(item,attempt.answer);
+    add(!acceptedAttempts.has(attemptId) || !!db.prepare('SELECT 1 FROM dialogue_coaching WHERE attempt_id=?').get(attemptId),'INSERT INTO dialogue_coaching VALUES (?,?,?,?)',[attemptId,coaching.focus,coaching.evidence,coaching.next_step]);
   }
   for (const item of (data.dialogue_requests || [])) {
     record(item); const requestId=id(item.request_id), attemptId=id(item.attempt_id); unique('dialogue_request',requestId);

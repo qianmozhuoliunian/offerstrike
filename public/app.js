@@ -231,6 +231,11 @@ const toast = createToast(escapeHtml);
    if (topbarRole) topbarRole.textContent = displayRole;
   const searchRole = $('#search-role-text');
    if (searchRole) searchRole.textContent = displayRole;
+   const roleFocus = $('#role-coaching-focus');
+   if (roleFocus) {
+     roleFocus.hidden = !state.role || !state.roleCoaching?.focus;
+     roleFocus.textContent = roleFocus.hidden ? '' : `本岗位练习参考 · ${state.roleCoaching.name}：${state.roleCoaching.focus}`;
+   }
 
    // Dashboard metric widgets
    const widgetRole = $('#widget-role-display');
@@ -1271,9 +1276,9 @@ const toast = createToast(escapeHtml);
          ai_relevance: aiRelevance
         }, controller.signal);
         if (requestId !== searchRequestId || state.role !== role) return;
-       const matched = data.results || [], unverified = data.unverified_results || [];
-       const statusText = `「${role}」找到 ${matched.length} 条可能相关的结果 · ${company || '不限公司'} · ${rangeLabel} · ${sourceLabel}。${data.notice || ''}`;
-       searchBatch = {role, results:[...matched,...unverified], conditions:{company,range,source,ai_relevance:aiRelevance}, statusText};
+       const matched = data.results || [], supplemental = data.supplementary_results || [], unverified = data.unverified_results || [];
+       const statusText = `「${role}」找到 ${matched.length} 条面经线索${supplemental.length ? `，另有 ${supplemental.length} 条补充内容` : ''} · ${company || '不限公司'} · ${rangeLabel} · ${sourceLabel}。${data.notice || ''}`;
+       searchBatch = {role, results:[...matched,...supplemental,...unverified], conditions:{company,range,source,ai_relevance:aiRelevance}, statusText};
        updateSearchConditionsNotice();
        if (resultsEl) {
            const renderResult = (r, i) => {
@@ -1284,6 +1289,7 @@ const toast = createToast(escapeHtml);
              <article class="result-item">
                <div class="result-meta">
                  <span class="apple-pill ${platformClass}">${escapeHtml(r.platform || '外部来源')}</span>
+                 ${r.content_hint === 'listing' ? '<span class="apple-pill match-unknown">列表页线索</span>' : (r.content_hint === 'compilation' ? '<span class="apple-pill match-unknown">疑似整理内容</span>' : (r.content_hint === 'interview_clue' ? '<span class="apple-pill match-unknown">面经线索，待核实</span>' : ''))}
                  ${r.role_match === 'unknown' ? '<span class="apple-pill match-unknown">相关性待核实</span>' : (r.role_match === 'title_keyword' ? '<span class="apple-pill match-ok">标题含岗位关键词</span>' : '')}
                  ${r.company_match === 'unknown' ? '<span class="apple-pill match-unknown">公司待核实</span>' : (r.company_match === 'title_keyword' ? '<span class="apple-pill match-ok">标题含公司词，待核实</span>' : '')}
                  ${r.ai_relevance === 'related' ? '<span class="apple-pill match-ok">AI 初筛可能相关</span>' : (r.ai_relevance === 'unrelated' ? '<span class="apple-pill match-unknown">AI 判断可能无关</span>' : (r.ai_relevance === 'uncertain' ? '<span class="apple-pill match-unknown">AI 无法判断</span>' : ''))}
@@ -1303,7 +1309,7 @@ const toast = createToast(escapeHtml);
                    <button type="button" class="apple-btn apple-btn-secondary result-organize" data-organize="${i}" ${saved?.id ? '' : 'hidden'}>整理题目</button>
                  </div>
                  <a href="${escapeHtml(r.url)}" class="result-open-link" target="_blank" rel="noopener noreferrer">
-                   <span>打开原帖</span>
+                   <span>${r.content_hint === 'listing' ? '打开列表' : '打开来源'}</span>
                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                  </a>
                </div>
@@ -1311,15 +1317,21 @@ const toast = createToast(escapeHtml);
            `; };
            const matchesMarkup = matched.length ? matched.map(renderResult).join('') : `
              <div class="apple-empty-state" style="padding: 28px;">
-               <div class="empty-state-desc">${data.partial_failure ? '部分检索失败，暂时没有可展示的相关结果，请重试。' : '暂时没有找到可能相关的面试内容。请检查目标岗位，或调整时间范围和公司关键词。'}</div>
+               <div class="empty-state-desc">${data.partial_failure ? '部分检索失败，暂时没有可展示的面经线索，请重试。' : supplemental.length || unverified.length ? '暂时没有找到明确的面经线索，可以查看下方补充内容或调整筛选条件。' : '暂时没有找到面经线索。请检查目标岗位，或调整时间范围和公司关键词。'}</div>
              </div>`;
+           const supplementalMarkup = supplemental.length ? `
+             <details class="search-unverified">
+               <summary>另有 ${supplemental.length} 条补充内容（整理、列表或类型待核实）</summary>
+               <p>根据标题或链接识别，可能有误；列表页通常包含多个岗位，日期不代表每篇帖子的日期。</p>
+               ${supplemental.map((result, index) => renderResult(result, matched.length + index)).join('')}
+             </details>` : '';
            const unverifiedMarkup = unverified.length ? `
              <details class="search-unverified">
                <summary>另有 ${unverified.length} 条相关性未确认（可能无关）</summary>
                <p>以下结果的岗位、公司或面试线索不足，或 AI 判断可能无关；请打开原帖核实。</p>
-               ${unverified.map((result, index) => renderResult(result, matched.length + index)).join('')}
+               ${unverified.map((result, index) => renderResult(result, matched.length + supplemental.length + index)).join('')}
              </details>` : '';
-           resultsEl.innerHTML = matchesMarkup + unverifiedMarkup;
+           resultsEl.innerHTML = matchesMarkup + supplementalMarkup + unverifiedMarkup;
        }
      } catch (err) {
         if (requestId === searchRequestId && err.name !== 'AbortError' && statusBanner) {
@@ -1443,10 +1455,13 @@ const toast = createToast(escapeHtml);
      html += dialogue.turns.map((turn,index) => `
        <div class="dialogue-message"><strong>${index ? 'AI 追问' : escapeHtml(origins[dialogue.origin] || '练习题')}</strong><p>${escapeHtml(turn.question)}</p></div>
        <div class="dialogue-message dialogue-message--answer"><strong>你的回答</strong><p>${escapeHtml(turn.answer)}</p></div>
-       <div class="dialogue-message"><strong>AI 点评 · 仅供参考</strong><p>${escapeHtml(turn.feedback)}</p></div>`).join('');
+       <div class="dialogue-message dialogue-message--feedback"><strong>AI 点评 · 仅供参考</strong>${turn.coaching ? `<p class="coaching-focus"><b>本题重点</b> ${escapeHtml(turn.coaching.focus)}</p><p class="coaching-evidence"><b>回答摘录</b> “${escapeHtml(turn.coaching.evidence)}”</p>` : '<p class="coaching-unverified">本条点评没有可核对的回答摘录。</p>'}<p>${escapeHtml(turn.feedback)}</p>${turn.coaching ? `<p class="coaching-next"><b>可以再练</b> ${escapeHtml(turn.coaching.next_step)}</p>` : ''}</div>`).join('');
      const last = dialogue.turns[dialogue.turns.length - 1];
      if (!dialogue.summary && last.follow_up && dialogue.turns.length < 8) html += `<div class="dialogue-message"><strong>AI 追问 · 非原帖问题</strong><p>${escapeHtml(last.follow_up)}</p></div>`;
-     if (dialogue.summary) html += `<div class="dialogue-message dialogue-message--summary"><strong>本题总结 · AI 生成，仅供参考</strong><p>${escapeHtml(dialogue.summary)}</p></div>`;
+     if (dialogue.summary) {
+       const coaching = [...dialogue.turns].reverse().find(turn=>turn.coaching)?.coaching;
+       html += `<div class="dialogue-message dialogue-message--summary"><strong>本题总结 · AI 生成，仅供参考</strong><p>${escapeHtml(dialogue.summary)}</p>${coaching ? `<div class="coaching-action"><p>下一步：${escapeHtml(coaching.next_step)}</p><button type="button" class="practice-question-action" data-dialogue-reinforce ${dialogueBusy ? 'disabled' : ''}>生成一道针对性补练</button><small>会向 AI 发送本题完整对话和已确认的岗位要求；新题由 AI 生成。</small></div>` : ''}</div>`;
+     }
      html += `<div class="review-assessment" aria-label="本题自评"><strong>这道题感觉怎么样？</strong><div class="review-actions"><button type="button" class="practice-question-action" data-dialogue-rating="revisit">需要再练</button><button type="button" class="practice-question-action" data-dialogue-rating="comfortable">比较熟悉</button><button type="button" class="practice-question-action" data-dialogue-rating="unassessed">暂不评价</button></div><span class="review-assessment-status" role="status">自评会影响题库推荐。</span></div>`;
    } else {
      html = '<div class="dialogue-empty">选择题目后开始回答，我们会围绕你的回答继续交流。</div>';
@@ -1496,6 +1511,29 @@ const toast = createToast(escapeHtml);
  });
 
  $('#dialogue-stream').addEventListener('click', async e => {
+   const reinforceButton=e.target.closest('[data-dialogue-reinforce]');
+   if (reinforceButton) {
+     if (dialogueBusy || !dialogue.summary || !dialogue.turns.length) return;
+     const role=state.role, revision=dialogueRevision, roleAtSubmit=roleRevision;
+     const question=$('#question').value, answer=$('#answer').value, last=dialogue.turns.at(-1);
+     if (answer.trim() && !window.confirm('生成补练会替换当前未发送的回答，确定继续吗？')) return;
+     dialogueBusy=true; renderDialogue(); dialogueStatus('正在根据本题对话生成 AI 补练题…','info');
+     try {
+       await writeDraft();
+       if (state.role!==role || dialogueRevision!==revision || roleRevision!==roleAtSubmit) return;
+       const result=await api('/api/practice/dialogue/reinforce','POST',{role,attempt_id:last.id});
+       if (state.role!==role || dialogueRevision!==revision || roleRevision!==roleAtSubmit || $('#question').value!==question || $('#answer').value!==answer) return;
+       if (!result.question || !result.generation_token) throw Error('生成题目无效，请重试');
+       clearPracticeHelp(); clearRecommendationChoice(); resetDialogue();
+       $('#question').value=result.question; $('#answer').value=''; $('#answer-char-count').textContent='0 字';
+       dialogue.role=role; dialogue.origin='ai'; dialogue.generation={question:result.question,token:result.generation_token};
+       try { sessionStorage.setItem('practice-generated:' + role, JSON.stringify(dialogue.generation)); } catch {}
+       setQuestionContext({text:result.question,origin:'ai'}); scheduleDraft(); renderDialogue();
+       dialogueStatus('已生成 AI 补练题；它不是原帖中的题目。'); $('#question').focus();
+     } catch(err) { if (state.role===role && dialogueRevision===revision) dialogueStatus('补练题生成失败，原对话和草稿仍保留：' + err.message,'error'); }
+     finally { if (state.role===role && dialogueRevision===revision) { dialogueBusy=false; renderDialogue(); } }
+     return;
+   }
    const button = e.target.closest('[data-dialogue-rating]');
    const first = dialogue.turns[0]; if (!button || !first) return;
    const status = $('#dialogue-stream .review-assessment-status');
@@ -1529,7 +1567,7 @@ const toast = createToast(escapeHtml);
      const result = await api('/api/practice/dialogue/turn','POST',payload);
      if (dialogueRevision !== revision || roleRevision !== roleAtSubmit || state.role !== role) return;
      dialogue.role = role; dialogue.origin = dialogue.origin || result.origin || 'user';
-     dialogue.turns.push({id:result.id,question,answer,feedback:result.feedback,follow_up:result.follow_up || ''});
+     dialogue.turns.push({id:result.id,question,answer,feedback:result.feedback,follow_up:result.follow_up || '',coaching:result.coaching || null});
      dialogue.generation = null; dialogueRequest = null;
      try { sessionStorage.removeItem('practice-generated:' + role); sessionStorage.removeItem('practice-request:' + role); sessionStorage.setItem('practice-dialogue:' + role, JSON.stringify({id:result.id})); } catch {}
      const canFollow = result.follow_up && dialogue.turns.length < 8;
@@ -1539,7 +1577,9 @@ const toast = createToast(escapeHtml);
      dialogueStatus(canFollow ? '可以继续回答 AI 追问，也可以结束并总结。' : dialogue.turns.length >= 8 ? '本题已达到 8 轮上限，请结束并总结。' : '本题暂时没有更多追问，可以结束并总结。');
      try { await writeDraft(); } catch { dialogueStatus('本轮已保存，但新草稿保存失败；刷新后请从练习记录查看。','error'); }
      await refresh().catch(() => {});
-     if (canFollow) $('#answer').focus();
+     if (canFollow) $('#answer').focus({preventScroll:true});
+     const feedbacks=$('#dialogue-stream')?.querySelectorAll?.('.dialogue-message--feedback');
+     feedbacks?.[feedbacks.length - 1]?.scrollIntoView({block:'start'});
    } catch (err) {
      if (dialogueRevision === revision && state.role === role) dialogueStatus('发送失败，回答仍保留在输入框：' + err.message + '。可重试。','error');
    } finally {
@@ -1560,6 +1600,7 @@ const toast = createToast(escapeHtml);
      if (dialogueRevision !== revision || roleRevision !== roleAtSubmit || state.role !== role) return;
      dialogue.summary = result.summary; dialogueBusy = false; renderDialogue();
      dialogueStatus($('#answer').value.trim() ? '总结已保存，未发送的回答仍保留在草稿中。' : '总结已保存，可以选择下一题。');
+     $('#dialogue-stream')?.querySelector?.('.dialogue-message--summary')?.scrollIntoView({block:'start'});
    } catch (err) { if (dialogueRevision === revision && state.role === role) dialogueStatus('总结失败，原有对话和草稿仍保留：' + err.message,'error'); }
    finally { if (dialogueRevision === revision && state.role === role) { dialogueBusy = false; renderDialogue(); } }
  });

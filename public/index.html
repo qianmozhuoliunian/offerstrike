@@ -320,6 +320,7 @@
                 <textarea id="question" rows="3" placeholder="输入你想练习的知识、场景或经历问题" required></textarea>
               </div>
               <p id="question-context" class="question-context" role="status" hidden></p>
+              <p id="role-coaching-focus" class="role-coaching-focus" hidden></p>
               <div id="recommendation-choice" class="recommendation-choice" hidden>
                 <p id="recommendation-message" role="status" aria-live="polite"></p>
                 <div class="practice-help-actions">
@@ -365,7 +366,7 @@
             <div class="practice-submit-row"><button type="button" class="apple-btn apple-btn-secondary" id="dialogue-finish" hidden>结束并总结</button><button class="apple-btn apple-btn-primary practice-submit" type="submit" id="review-btn"><span>发送回答</span><span aria-hidden="true">→</span></button></div>
             <div class="privacy-callout">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-              <span>提交回答或总结时，会向已配置的 AI 服务发送当前岗位、已确认的岗位要求和本题完整对话；不会发送简历。单题最多 8 轮，每个问题最多 2000 字、回答最多 10000 字，对话总长度最多 30000 字；超出时请缩短内容。</span>
+              <span>提交回答、总结或选择生成补练时，会向已配置的 AI 服务发送当前岗位、已确认的岗位要求和本题完整对话；不会发送简历。单题最多 8 轮，每个问题最多 2000 字、回答最多 10000 字，对话总长度最多 30000 字；超出时请缩短内容。</span>
             </div>
           </form>
         </section>

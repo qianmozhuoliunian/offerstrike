@@ -2890,6 +2890,15 @@ body {
 .dialogue-message p { margin: 0; white-space: pre-wrap; color: var(--lens-text-primary); font-size: 14px; line-height: 1.7; }
 .dialogue-message--answer { justify-self: end; background: #edf2ff; border-color: #dce5f8; }
 .dialogue-message--summary { background: #f3f6e8; border-color: #dfe8c9; }
+.dialogue-message--feedback, .dialogue-message--summary { scroll-margin-top: 85px; }
+.role-coaching-focus { margin: 0; padding: 10px 12px; border-left: 3px solid #91ad53; color: var(--lens-text-secondary); background: #f5f8ed; line-height: 1.6; font-size: 13px; }
+.dialogue-message--feedback > p + p { margin-top: 9px; }
+.dialogue-message--feedback p b { color: #536681; font-size: 12px; margin-right: 5px; }
+.dialogue-message--feedback .coaching-evidence { padding: 8px 10px; border-left: 3px solid #b6c89b; background: #f6f8ee; }
+.dialogue-message--feedback .coaching-unverified { color: var(--lens-text-secondary); font-size: 12px; }
+.coaching-action { display: grid; justify-items: start; gap: 8px; margin-top: 14px; }
+.coaching-action .practice-question-action { min-height: 44px; }
+.coaching-action small { color: var(--lens-text-secondary); line-height: 1.6; }
 .practice-submit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .practice-compose #answer { min-height: 120px; }
 #dialogue-finish[hidden], #review-status[hidden], #feedback[hidden] { display: none; }

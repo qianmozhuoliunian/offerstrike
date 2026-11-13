@@ -66,7 +66,7 @@ test('search results and saved sources remain bound to their original role', asy
   h.calls[0].resolve({notice:'需核实',results:[{title:'来源',url:'https://example.org',date:''}]});
   await pending;
   assert.match(h.status.textContent,/岗位甲/);
-  assert.match(h.status.textContent,/找到 1 条可能相关的结果/);
+  assert.match(h.status.textContent,/找到 1 条面经线索/);
   assert.match(h.results.innerHTML,/来源/);
   assert.match(h.results.innerHTML,/收藏来源/);
   const saveButton={dataset:{save:'0'},disabled:false};
@@ -90,8 +90,8 @@ test('search errors and empty results are shown in the page', async () => {
   const empty=h.handlers['form:submit']({preventDefault(){}});
   h.calls[1].resolve({notice:'请核实',results:[]});
   await empty;
-  assert.match(h.status.textContent,/找到 0 条可能相关的结果/);
-  assert.match(h.results.innerHTML,/暂时没有找到可能相关的面试内容/);
+  assert.match(h.status.textContent,/找到 0 条面经线索/);
+  assert.match(h.results.innerHTML,/暂时没有找到面经线索/);
 });
 
 test('unverified results are folded separately and their save action uses the right item', async () => {
@@ -113,12 +113,21 @@ test('unverified results are folded separately and their save action uses the ri
   h.calls[1].resolve({id:'saved'}); await saving;
 });
 
+test('supplemental results stay separate and saving unverified uses the right item', async () => {
+  const h=harness();const pending=h.handlers['form:submit']({preventDefault(){}});
+  h.calls[0].resolve({results:[{title:'岗位甲面经',url:'https://example.org/post',content_hint:'interview_clue'}],supplementary_results:[{title:'岗位甲题目汇总',url:'https://example.org/collection',content_hint:'compilation'}],unverified_results:[{title:'待核对',url:'https://example.org/uncertain'}]});await pending;
+  assert.match(h.results.innerHTML,/1 条补充内容/);
+  assert.match(h.results.innerHTML,/面经线索，待核实/);
+  const saving=h.handlers['results:click']({target:targetFor('[data-save]',{dataset:{save:'2'},disabled:false,textContent:'',closest:()=>null})});
+  assert.equal(h.calls[1].data.url,'https://example.org/uncertain');h.calls[1].resolve({id:'saved'});await saving;
+});
+
 test('when only unverified items exist, the empty state stays visible and the items stay folded', async () => {
   const h=harness(); const pending=h.handlers['form:submit']({preventDefault(){}});
   h.calls[0].resolve({results:[],unverified_results:[{title:'其他话题',url:'https://example.org',role_match:'unknown'}]});
   await pending;
-  assert.match(h.status.textContent,/找到 0 条可能相关的结果/);
-  assert.match(h.results.innerHTML,/暂时没有找到可能相关的面试内容/);
+  assert.match(h.status.textContent,/找到 0 条面经线索/);
+  assert.match(h.results.innerHTML,/暂时没有找到明确的面经线索/);
   assert.match(h.results.innerHTML,/<details class="search-unverified">/);
   assert.match(h.results.innerHTML,/可能无关/);
 });

@@ -1,6 +1,7 @@
 import { createToast } from './ui/toast.js';
 import { createSourceExtraction } from './ui/source-extraction.js';
 import { mountAgentWorkflow } from './ui/agent-workflow.js';
+import { mountDesktopSettings } from './ui/desktop-controls.js';
 
  /**
   * 见面 · 面试准备助手 (Apple HIG Design System Implementation)
@@ -193,6 +194,7 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
     ========================================================================== */
 
  function render() {
+   renderReturnPractice();
    // Form inputs & Topbar badges
    const roleInput = $('#role');
    if (roleInput) roleInput.value = state.role || '';
@@ -447,7 +449,7 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
        <article class="attempt-card">
          <div class="attempt-header">
            <div style="display:flex; align-items:center; gap:8px;">
-             <span class="apple-pill purple">AI 复习</span>
+             <span class="apple-pill purple">${a.feedback ? '已点评' : '仅本地作答'}</span>
              ${a.role ? `<span class="apple-pill blue">${escapeHtml(a.role)}</span>` : ''}
               ${a.question_link_available === 0 ? '<span class="apple-pill gray">关联题目已不可用</span>' : ''}
            </div>
@@ -455,7 +457,8 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
          </div>
          <div class="attempt-question">Q: ${escapeHtml(a.question)}</div>
          <div class="attempt-answer"><strong>你的作答：</strong>${escapeHtml(a.answer)}</div>
-         <div class="attempt-feedback">${escapeHtml(a.feedback)}</div>
+         <div class="attempt-feedback">${a.feedback ? escapeHtml(a.feedback) : '尚未获取 AI 点评。'}</div>
+         ${!a.feedback && a.role===state.role && state.aiConfigured ? `<button type="button" class="apple-btn apple-btn-secondary compact" data-local-feedback="${escapeHtml(a.id)}">获取 AI 点评</button>` : ''}
           <label>本次自评 <select class="apple-select" data-attempt-assessment="${escapeHtml(a.id)}" aria-label="本次练习自评">
             <option value="unassessed" ${!a.rating ? 'selected' : ''}>尚未自评</option>
             <option value="revisit" ${a.rating === 'revisit' ? 'selected' : ''}>需要再练</option>
@@ -470,7 +473,12 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
     const select=e.target.closest('[data-attempt-assessment]');
     if (!select) return;
     select.disabled=true;
-    try { await api('/api/attempts/' + encodeURIComponent(select.dataset.attemptAssessment) + '/assessment', 'PUT', {rating:select.value}); await refresh(); toast.success('自评已保存'); }
+    try {
+      await api('/api/attempts/' + encodeURIComponent(select.dataset.attemptAssessment) + '/assessment', 'PUT', {rating:select.value});
+      const suggestion=$('#today-practice-status'); if (suggestion) suggestion.textContent='';
+      if (typeof agents !== 'undefined') agents.assessed();
+      await refresh(); toast.success('自评已保存');
+    }
     catch (err) { toast.error(err.message); await refresh().catch(() => {}); }
     finally { select.disabled=false; }
   });
@@ -512,7 +520,7 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
         aiBadge.textContent = '已配置（尚未验证连接）';
      } else {
        aiBadge.className = 'apple-pill gray';
-       aiBadge.textContent = '待配置 ($env:AI_API_KEY)';
+       aiBadge.textContent = window.offerPilotDesktop ? '待配置' : '待配置 ($env:AI_API_KEY)';
      }
    }
  }
@@ -520,7 +528,7 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
  async function refresh() {
     const nextState = await api('/api/state');
     const changedRole = state.role !== nextState.role;
-    if (changedRole) { roleRevision++; if (typeof agents !== 'undefined') agents.roleChanged(); invalidateSearchForRoleChange(); clearPracticeHelp(); clearRecommendationChoice(); resetDialogue(false); }
+    if (changedRole) { roleRevision++; const suggestion=$('#today-practice-status'); if(suggestion) suggestion.textContent=''; if (typeof agents !== 'undefined') agents.roleChanged(); invalidateSearchForRoleChange(); clearPracticeHelp(); clearRecommendationChoice(); resetDialogue(false); }
     else if (state.roleValidation !== nextState.roleValidation) invalidateSearchForRoleChange();
     state = nextState;
    render();
@@ -1594,6 +1602,7 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
      if (role !== state.role || revision !== dialogueRevision) return;
      status.textContent = button.dataset.dialogueRating === 'revisit' ? '已保存：这题会优先推荐。' : button.dataset.dialogueRating === 'comfortable' ? '已保存：这题会稍后推荐。' : '已设为尚未自评。';
      if (typeof agents !== 'undefined') agents.assessed();
+     const suggestion=$('#today-practice-status'); if (suggestion) suggestion.textContent='';
      ratingButtons.forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
      await refresh();
    } catch (err) { if (status && role === state.role && revision === dialogueRevision) status.textContent = '自评保存失败：' + err.message; }
@@ -1602,7 +1611,7 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
 
  const reviewForm = $('#review-form');
  if (reviewForm) reviewForm.addEventListener('submit', async e => {
-   e.preventDefault(); if (dialogueBusy) return;
+   e.preventDefault(); if (dialogueBusy || $('#save-local-practice')?.disabled) return;
    const role = state.role, question = $('#question').value.trim(), answer = $('#answer').value.trim();
    if (!role) { dialogueStatus('请先设置目标岗位。','error'); return; }
    if (!question || !answer) { dialogueStatus('请先填写问题和回答。','error'); return; }
@@ -1661,6 +1670,64 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
    finally { if (dialogueRevision === revision && state.role === role) { dialogueBusy = false; renderDialogue(); } }
  });
  // Initial Startup
+ function renderReturnPractice() {
+   const panel=$('#return-practice');
+   if (!panel) return;
+   panel.hidden=!state.role;
+   const draft=state.draft?.question?.trim() || '';
+   $('#resume-draft').hidden=!draft;
+   $('#return-draft').textContent=draft ? '已保留草稿：'+draft : '查看当前岗位的下一道推荐题。';
+ }
+ $('#today-practice')?.addEventListener('click',async event=>{
+   const button=event.currentTarget, status=$('#today-practice-status'), role=state.role, revision=roleRevision;
+   button.disabled=true;status.textContent='正在从本机题库选择…';
+   try {
+     const {question}=await api('/api/recommendation','POST',{role});
+     if (revision!==roleRevision) return;
+     if (!question) {status.textContent='本岗位还没有题目，可以先添加面经或题目。';return;}
+     status.textContent=`${question.text} · ${question.reason}。${question.reasonDetails || ''}`;
+     const start=document.createElement('button');
+     start.type='button';start.className='apple-btn apple-btn-secondary compact';start.textContent='练习这题';
+     start.addEventListener('click',()=>{if(revision===roleRevision && useRecommendedQuestion(question)) switchTab('practice');});
+     status.append(' ',start);
+   } catch(error){if(revision===roleRevision) status.textContent=error.message;}
+   finally{button.disabled=false;}
+ });
+ let localRequest;
+ $('#save-local-practice')?.addEventListener('click',async event=>{
+   const button=event.currentTarget, role=state.role, revision=roleRevision;
+   if (dialogueBusy || dialogue.turns.length) {dialogueStatus('请结束当前 AI 对话，或选择新题后仅保存作答。','error');return;}
+   const question=$('#question').value.trim(), answer=$('#answer').value.trim();
+   if(!role || !question || !answer) {dialogueStatus('请先设置岗位、填写题目和回答。','error');return;}
+   const data={role,question,answer,question_ref:questionContext?.questionRef || null};
+   const signature=JSON.stringify(data);
+   if(localRequest?.signature!==signature) localRequest={signature,id:crypto.randomUUID()};
+   button.disabled=true;
+   try {
+     const result=await api('/api/practice/local','POST',{...data,request_id:localRequest.id});
+     localRequest=null;
+     if(revision!==roleRevision) return;
+     if($('#answer').value.trim()===answer && $('#question').value.trim()===question) {
+       $('#answer').value=''; $('#answer-char-count').textContent='0 字';
+       await writeDraft().catch(()=>{});
+     }
+     if (revision!==roleRevision) return;
+     await refresh().catch(()=>{});
+     if (revision!==roleRevision) return;
+     dialogueStatus('作答已保存在本机，可以在下方记录自评。');
+     const rating=document.querySelector(`[data-attempt-assessment="${result.id}"]`);
+     rating?.focus();
+   } catch(error){if(revision===roleRevision) dialogueStatus(error.message,'error');}
+   finally{button.disabled=false;}
+ });
+ $('#attempts-list')?.addEventListener('click',async event=>{
+   const button=event.target.closest('[data-local-feedback]');
+   if(!button || !window.confirm('获取点评会把这道题和这次回答完整发给已配置的 AI 服务。继续吗？')) return;
+   button.disabled=true;
+   try {await api('/api/practice/local/'+encodeURIComponent(button.dataset.localFeedback)+'/feedback','POST',{role:state.role});await refresh();toast.success('点评已添加到原记录');}
+   catch(error){toast.error(error.message);button.disabled=false;}
+ });
+ mountDesktopSettings({flushDraft:writeDraft});
  const initialHash = window.location.hash.slice(1);
  if (initialHash && tabTitles[initialHash]) {
    switchTab(initialHash);

@@ -1,0 +1,22 @@
+appId: com.offerpilot.workbench
+productName: OfferPilot
+asar: true
+directories:
+  output: dist/windows
+files:
+  - desktop/**
+  - public/**
+  - src/**
+  - server.js
+  - package.json
+win:
+  signAndEditExecutable: false
+  target:
+    - nsis
+    - zip
+nsis:
+  artifactName: OfferPilot-Setup.exe
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false

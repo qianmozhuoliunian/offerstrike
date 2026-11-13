@@ -1,1 +1,20 @@
-{"name":"interview-workbench","version":"0.1.0","private":true,"type":"module","scripts":{"start":"node --env-file-if-exists=.env server.js","test":"node --test"},"engines":{"node":">=22.13"},"dependencies":{"parse5":"8.0.1"}}
+{
+  "name": "interview-workbench",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OfferPilot 面试准备工作台",
+  "author": "OfferPilot",
+  "type": "module",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "test": "node --test",
+    "demo:build": "node scripts/build-demo.mjs",
+    "demo:preview": "node scripts/build-demo.mjs && node scripts/preview-demo.mjs",
+    "desktop": "electron .",
+    "desktop:build": "electron-builder --win --x64"
+  },
+  "engines": {"node": ">=22.13"},
+  "dependencies": {"parse5": "8.0.1"},
+  "devDependencies": {"electron": "45.3.2", "electron-builder": "26.18.0"}
+}

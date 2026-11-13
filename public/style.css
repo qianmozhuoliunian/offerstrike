@@ -3009,3 +3009,10 @@ body {
   #pane-library .source-questions { margin-top: 18px; padding-top: 18px; }
   #pane-library .ai-extract-body, #pane-library .add-question-form { padding: 4px 14px 16px; }
 }
+.agent-panel { padding: 1rem 1.25rem; margin: 1rem 0; border: 1px solid var(--border, #ddd); border-radius: 1rem; overflow-wrap: anywhere; }
+.agent-panel > summary, .agent-panel details > summary { padding-block: .65rem; cursor: pointer; font-weight: 600; }
+.agent-panel .apple-form-vertical { margin-block: .8rem; }
+.agent-panel input:not([type=checkbox]), .agent-panel textarea { box-sizing: border-box; width: 100%; }
+.agent-actions { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.agent-actions .apple-btn { min-height: 44px; }
+.agent-panel blockquote { margin: .5rem 0; padding: .5rem .75rem; border-inline-start: 3px solid currentColor; white-space: pre-wrap; }

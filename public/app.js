@@ -1,5 +1,6 @@
 import { createToast } from './ui/toast.js';
 import { createSourceExtraction } from './ui/source-extraction.js';
+import { mountAgentWorkflow } from './ui/agent-workflow.js';
 
  /**
   * 见面 · 面试准备助手 (Apple HIG Design System Implementation)
@@ -74,6 +75,8 @@ import { createSourceExtraction } from './ui/source-extraction.js';
 
 const toast = createToast(escapeHtml);
 const sourceExtraction = createSourceExtraction({api, getSource:id=>state.sources.find(source=>source.id===id), refresh, escapeHtml, toast});
+const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:roleRevision}),openTab:switchTab,
+  startQuestion:question=>useRecommendedQuestion(question),refresh});
 
  /* ==========================================================================
    Tab Navigation Architecture (Emil's Blur Crossfade Masking)
@@ -517,7 +520,7 @@ const sourceExtraction = createSourceExtraction({api, getSource:id=>state.source
  async function refresh() {
     const nextState = await api('/api/state');
     const changedRole = state.role !== nextState.role;
-    if (changedRole) { roleRevision++; invalidateSearchForRoleChange(); clearPracticeHelp(); clearRecommendationChoice(); resetDialogue(false); }
+    if (changedRole) { roleRevision++; if (typeof agents !== 'undefined') agents.roleChanged(); invalidateSearchForRoleChange(); clearPracticeHelp(); clearRecommendationChoice(); resetDialogue(false); }
     else if (state.roleValidation !== nextState.roleValidation) invalidateSearchForRoleChange();
     state = nextState;
    render();
@@ -1590,6 +1593,7 @@ const sourceExtraction = createSourceExtraction({api, getSource:id=>state.source
      await api('/api/attempts/' + encodeURIComponent(first.id) + '/assessment','PUT',{rating:button.dataset.dialogueRating});
      if (role !== state.role || revision !== dialogueRevision) return;
      status.textContent = button.dataset.dialogueRating === 'revisit' ? '已保存：这题会优先推荐。' : button.dataset.dialogueRating === 'comfortable' ? '已保存：这题会稍后推荐。' : '已设为尚未自评。';
+     if (typeof agents !== 'undefined') agents.assessed();
      ratingButtons.forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
      await refresh();
    } catch (err) { if (status && role === state.role && revision === dialogueRevision) status.textContent = '自评保存失败：' + err.message; }
@@ -1618,6 +1622,7 @@ const sourceExtraction = createSourceExtraction({api, getSource:id=>state.source
      if (dialogueRevision !== revision || roleRevision !== roleAtSubmit || state.role !== role) return;
      dialogue.role = role; dialogue.origin = dialogue.origin || result.origin || 'user';
      dialogue.turns.push({id:result.id,question,answer,feedback:result.feedback,follow_up:result.follow_up || '',coaching:result.coaching || null});
+     if (typeof agents !== 'undefined') agents.answered(questionContext?.questionRef,dialogue.turns[0].id);
      dialogue.generation = null; dialogueRequest = null;
      try { sessionStorage.removeItem('practice-generated:' + role); sessionStorage.removeItem('practice-request:' + role); sessionStorage.setItem('practice-dialogue:' + role, JSON.stringify({id:result.id})); } catch {}
      const canFollow = result.follow_up && dialogue.turns.length < 8;
@@ -1649,6 +1654,7 @@ const sourceExtraction = createSourceExtraction({api, getSource:id=>state.source
      const result = await api('/api/practice/dialogue/summary','POST',{role,attempt_id:last.id});
      if (dialogueRevision !== revision || roleRevision !== roleAtSubmit || state.role !== role) return;
      dialogue.summary = result.summary; dialogueBusy = false; renderDialogue();
+     if (typeof agents !== 'undefined') agents.completed(dialogue.turns[0].id,result.summary);
      dialogueStatus($('#answer').value.trim() ? '总结已保存，未发送的回答仍保留在草稿中。' : '总结已保存，可以选择下一题。');
      $('#dialogue-stream')?.querySelector?.('.dialogue-message--summary')?.scrollIntoView({block:'start'});
    } catch (err) { if (dialogueRevision === revision && state.role === role) dialogueStatus('总结失败，原有对话和草稿仍保留：' + err.message,'error'); }

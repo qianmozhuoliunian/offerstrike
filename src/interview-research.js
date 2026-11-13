@@ -8,11 +8,11 @@ const MIN_CLUES = 3;
 const TIMEOUT_MS = 12_000;
 const platforms = {nowcoder:'牛客',juejin:'掘金',zhihu:'知乎',csdn:'CSDN',cnblogs:'博客园','51cto':'51CTO',segmentfault:'SegmentFault'};
 
-async function fetchCandidates(fetcher, provider, key, request) {
+export async function fetchCandidates(fetcher, provider, key, request, signal) {
   const exa = provider === 'Exa';
   const response = await fetcher(exa ? 'https://api.exa.ai/search' : 'https://api.tavily.com/search', {
     method: 'POST',
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS),
     headers: {'content-type':'application/json', ...(exa ? {'x-api-key':key} : {authorization:`Bearer ${key}`})},
     body: JSON.stringify(request)
   });
@@ -26,7 +26,7 @@ async function fetchCandidates(fetcher, provider, key, request) {
   }));
 }
 
-function normalizeCandidates(rows, provider) {
+export function normalizeCandidates(rows, provider) {
   return rows.flatMap(item => {
     const url = item?.url;
     const site = typeof url === 'string' && searchSource(url);

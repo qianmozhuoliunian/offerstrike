@@ -111,11 +111,16 @@ export function setAssessment(db, id, rating) {
   return {rating};
 }
 
-export function recommendQuestion(db, role, excludeText = '', sourcePreference = '') {
+export function recommendQuestion(db, role, excludeText = '', sourcePreference = '', {topic='',excludeIds=[]} = {}) {
   role = validRole(role);
   if (!['','self_reported'].includes(sourcePreference)) throw Error('题目来源筛选无效');
   const sources=listSources(db).filter(s=>s.role===role && (sourcePreference !== 'self_reported' || s.type === '真实面经（自述）')).flatMap(s=>s.questions.map(q=>({role,text:q.text,question_ref:{kind:'source',id:q.id},questionCreated:q.created,topic:q.topic,sourceId:s.id,sourceTitle:s.title,sourceUrl:s.url,sourceDate:s.date,sourceType:s.type,interviewDate:s.interview_date})));
   const personal=sourcePreference === 'self_reported' ? [] : db.prepare("SELECT d.id,d.question,d.created,COALESCE(t.topic,'') AS topic FROM debriefs d LEFT JOIN question_topics t ON t.kind='debrief' AND t.question_id=d.id WHERE d.role=? AND d.include_in_library=1").all(role).map(d=>({role,text:d.question,question_ref:{kind:'debrief',id:d.id},questionCreated:d.created,topic:d.topic,sourceId:'debrief:'+d.id,sourceTitle:'个人面试记录',sourceType:'个人面试记录'}));
   const attempts=db.prepare('SELECT a.id,a.role,a.question,a.created,aa.rating,l.kind AS refKind,l.question_id AS refId FROM attempts a LEFT JOIN attempt_assessments aa ON aa.attempt_id=a.id LEFT JOIN attempt_question_links l ON l.attempt_id=a.id WHERE a.role=?').all(role);
-  return recommendFromHistory({role,candidates:[...sources,...personal],attempts,excludeText});
+  const canonical = text=>String(text || '').normalize('NFKC').trim().toLowerCase();
+  const pool = [...sources,...personal];
+  const excludedText = new Set(pool.filter(item=>excludeIds.includes(item.question_ref.id)).map(item=>canonical(item.text)));
+  const candidates = pool.filter(item=>!excludedText.has(canonical(item.text)) &&
+    (!topic || canonical(item.topic)===canonical(topic) || canonical(item.text).includes(canonical(topic))));
+  return recommendFromHistory({role,candidates,attempts,excludeText});
 }

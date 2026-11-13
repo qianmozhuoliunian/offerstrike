@@ -4,9 +4,10 @@
 
 ## 运行和测试
 
-需要 Node.js 22.13 或更新版本，无需安装第三方依赖：
+需要 Node.js 22.13 或更新版本：
 
 ```powershell
+npm ci
 npm start
 npm test
 ```
@@ -65,5 +66,7 @@ npm start
 当前尚未实现完整的自动掌握度模型、模拟面试、简历优化、提醒、跨设备同步和来源真实性自动核验。产品设计与后续范围见 [DESIGN.md](DESIGN.md)。
 
 面经研究与求职备战的推进顺序、搜索对比方法见 [面经研究路线](docs/interview-research-roadmap.md)。
+
+搜索页展开「深度研究」可按公开主题查找带摘录的题；当前只自动读取博客园文章，其余来源保留链接供手动核对。练习页的「备战计划与多题模拟」可按岗位要求、自评和题库安排下一步，也可串联最多三道已有题。简历能力提取需单独确认发送，只返回本次会话的能力线索。深度研究在 Node 中运行，快速搜索仍可选 FastAPI。运行上限、数据流和评估命令见 [Agent 使用与验收](docs/agent-evaluation.md)。
 
 AI 点评的固定样本和人工评估方法见 [docs/ai-review-evaluation.md](docs/ai-review-evaluation.md)。自动化测试使用模拟模型，不代表真实模型的判断准确率。

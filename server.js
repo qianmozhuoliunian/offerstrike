@@ -15,6 +15,9 @@ import { validateSourceText, isVerifiableEvidence, parseSourceCandidates } from 
 import { createDialogueApi, readDialogue } from './src/dialogue.js';
 import { createInterviewResearch } from './src/interview-research.js';
 import { createFastApiRetrieval } from './src/fastapi-retrieval.js';
+import { createResearch, parseCostBudget } from './src/research/index.js';
+import { createResearchModel } from './src/research/model.js';
+import { createAgentWorkflow } from './src/agent-workflow.js';
 
 await mkdir('data', {recursive:true});
 const db = new DatabaseSync('data/interview.sqlite');
@@ -40,6 +43,11 @@ const research = createInterviewResearch({
   } : undefined
 });
 const roleConfirmations = new Map();
+const agentExtract = createResearchModel({key:process.env.AI_API_KEY,model:process.env.AI_MODEL,baseUrl:process.env.AI_BASE_URL});
+const deepResearch = createResearch({keys:{Tavily:process.env.TAVILY_API_KEY,Exa:process.env.EXA_API_KEY},extract:agentExtract,
+  costBudget:parseCostBudget(process.env.RESEARCH_COST_BUDGET)});
+const agentWorkflow = createAgentWorkflow({db,currentRole,research:deepResearch,extract:agentExtract,
+  log:process.env.RESEARCH_LOG==='1' ? record=>console.log(JSON.stringify(record)) : undefined});
 let roleRequestRevision = 0;
 async function assessRole(role) {
   if (!process.env.AI_API_KEY || !process.env.AI_MODEL) return 'uncertain';
@@ -52,6 +60,13 @@ async function assessRole(role) {
   } catch { return 'uncertain'; }
 }
 async function api(req,res,path) {
+  if (req.method==='POST' && ['/api/research','/api/research/confirm','/api/career/plan','/api/career/resume'].includes(path)) {
+    const controller=new AbortController();
+    res.once('close',()=>controller.abort());
+    const result=await agentWorkflow(path,await body(req,45000),controller.signal);
+    if (!res.destroyed) return json(res,result.status || 200,result.body);
+    return;
+  }
   if(path==='/api/state' && req.method==='GET') { const role=currentRole(); return json(res,200,{role,roleCoaching:roleCoaching(role),roleValidation:roleValidationStatus(db,role),...getProfile(db,role),draft:getDraft(db,role),debriefs:db.prepare("SELECT d.*, COALESCE(t.topic,'') AS topic FROM debriefs d LEFT JOIN question_topics t ON t.kind='debrief' AND t.question_id=d.id ORDER BY d.created DESC").all(),sources:listSources(db), attempts:db.prepare("SELECT a.*, aa.rating, l.kind AS question_link_kind, l.question_id AS question_link_id, CASE WHEN l.kind='source' THEN EXISTS(SELECT 1 FROM questions q JOIN sources s ON s.id=q.source_id WHERE q.id=l.question_id AND s.role=a.role) WHEN l.kind='debrief' THEN EXISTS(SELECT 1 FROM debriefs d WHERE d.id=l.question_id AND d.role=a.role) WHEN l.kind IN ('missing_source','missing_debrief') THEN 0 ELSE NULL END AS question_link_available FROM attempts a LEFT JOIN attempt_assessments aa ON aa.attempt_id=a.id LEFT JOIN attempt_question_links l ON l.attempt_id=a.id ORDER BY a.created DESC LIMIT 30").all(),searchConfigured:research.providers.length>0,searchProviders:research.providers,aiConfigured:!!(process.env.AI_API_KEY && process.env.AI_MODEL)}); }
   if(path==='/api/role' && req.method==='POST') {
     const x=await body(req), revision=++roleRequestRevision, role=validateRoleInput(x.role), previousRole=currentRole();
@@ -229,6 +244,7 @@ const files = {
   '/app.js': [new URL('./public/app.js', import.meta.url), 'text/javascript'],
   '/ui/toast.js': [new URL('./public/ui/toast.js', import.meta.url), 'text/javascript'],
   '/ui/source-extraction.js': [new URL('./public/ui/source-extraction.js', import.meta.url), 'text/javascript'],
+  '/ui/agent-workflow.js': [new URL('./public/ui/agent-workflow.js', import.meta.url), 'text/javascript'],
   '/assets/interview-study-illustration.png': [new URL('./public/assets/interview-study-illustration.png', import.meta.url), 'image/png'],
   '/assets/interview-discover.png': [new URL('./public/assets/interview-discover.png', import.meta.url), 'image/png'],
   '/assets/interview-practice.png': [new URL('./public/assets/interview-practice.png', import.meta.url), 'image/png'],

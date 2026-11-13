@@ -6,6 +6,21 @@ import vm from 'node:vm';
 const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
 const handlers = app.slice(app.indexOf(' // Sources list item click actions'), app.indexOf(" $('#attempt-role-scope').addEventListener"));
 const openEditor = app.slice(app.indexOf(' async function openSourceQuestionEditor'), app.indexOf('\n function practiceSourceQuestion'));
+const openPracticeSource = app.slice(app.indexOf(' function openPracticeSource'), app.indexOf('\n function clearPracticeHelp'));
+
+test('practice returns to the correct library question and resets filters', () => {
+  const events=[], scope={value:'all'}, target={isConnected:true,scrollIntoView:()=>events.push('scroll'),focus:()=>events.push('focus')};
+  const state={role:'岗位甲',sources:[{id:'source-1',role:'岗位甲',questions:[{id:'q1'}]}]};
+  const window={location:{hash:'#practice'}};
+  const context=vm.createContext({state,window,document:{getElementById:id=>id==='library-question-q1'?target:null},
+    $:selector=>selector==='#library-role-scope'?scope:null,$$:()=>[],renderSources:()=>events.push('render'),
+    switchTab:tab=>{window.location.hash='#'+tab;events.push(tab);},requestAnimationFrame:fn=>fn(),toast:{error:message=>events.push(message)}});
+  vm.runInContext(`let activeFilter='filtered'; ${openPracticeSource}`,context);
+  vm.runInContext("openPracticeSource('q1')",context);
+  assert.equal(scope.value,'current'); assert.deepEqual(events,['render','library','scroll','focus']);
+  state.sources=[]; vm.runInContext("openPracticeSource('q1')",context);
+  assert.match(events.at(-1),/原题已不可用/);
+});
 
 function harness() {
   const events={}, calls=[], messages=[], practiced=[];

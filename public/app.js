@@ -335,8 +335,9 @@ const sourceExtraction = createSourceExtraction({api, getSource:id=>state.source
            <div class="source-questions">
              <h4 class="source-questions-heading">关联题目 <span>${questions.length}</span></h4>
              ${questions.length ? questions.map(q => `
-               <div class="source-question-row">
+               <div class="source-question-row" id="library-question-${escapeHtml(q.id)}" tabindex="-1">
                   <div class="source-question-content"><div class="source-question-text">${escapeHtml(q.text)}</div>
+                    ${(() => { const attempt=(state.attempts || []).find(a=>a.role===s.role && a.question_link_kind==='source' && a.question_link_id===q.id); return attempt ? `<p class="question-source-hint">最近 30 条练习中有记录 · ${attempt.rating==='revisit'?'需要再练':attempt.rating==='comfortable'?'比较熟悉':'尚未自评'}</p>` : ''; })()}
                     ${q.evidence ? `<details class="question-evidence"><summary>AI 整理 · 查看原文依据${q.evidence_question !== q.text ? '（题目已修改，请重新核对）' : ''}</summary><blockquote>${escapeHtml(q.evidence)}</blockquote><p>摘录来自用户粘贴的内容，请核对原帖与题意。</p></details>` : ''}
                     ${topicEditor('source',q.id,s.id,q.topic)}
                    <details class="question-note"><summary>个人笔记${q.note ? ' · 已保存' : ''}</summary>
@@ -570,7 +571,13 @@ const sourceExtraction = createSourceExtraction({api, getSource:id=>state.source
    el.replaceChildren(); el.hidden=!questionContext;
    if(!questionContext) return;
    if(questionContext.origin === 'ai') { el.textContent='AI 生成题 · 非真实面经，仅供练习。'; return; }
-   if(questionContext.parentId) { el.textContent='正在回答 AI 追问；点评会发送本题之前的完整对话。'; return; }
+   if(questionContext.parentId) {
+     el.textContent='正在回答 AI 追问；点评会发送本题之前的完整对话。';
+     const attempt=(state.attempts || []).find(item=>item.id===(dialogue.turns[0]?.id || questionContext.parentId) && item.role===state.role);
+     const sourceId=questionContext.sourceQuestionId || (attempt?.question_link_kind==='source' ? attempt.question_link_id : '');
+     if(sourceId) appendPracticeSourceLink(el,sourceId);
+     return;
+   }
    if(questionContext.reason) { const reason=document.createElement('div'); reason.textContent=`推荐原因：${questionContext.reason}${questionContext.reasonDetails ? ' · '+questionContext.reasonDetails : ''}`; el.append(reason); }
    if(questionContext.topics?.length) { const topics=document.createElement('div'); topics.textContent='主题：'+questionContext.topics.join('、'); el.append(topics); }
    const sources=questionContext.sources?.length ? questionContext.sources : [{title:questionContext.sourceTitle || '来源未知',url:questionContext.sourceUrl}];
@@ -582,6 +589,27 @@ const sourceExtraction = createSourceExtraction({api, getSource:id=>state.source
      if(source.date) line.append(document.createTextNode(' · 日期 '+source.date+'（待核实）'));
      el.append(line);
    }
+   const ref=questionContext.questionRef;
+   if(ref?.kind==='source') appendPracticeSourceLink(el,ref.id);
+ }
+
+ function appendPracticeSourceLink(el,questionId) {
+   if(state.sources.some(source=>source.role===state.role && (source.questions || []).some(question=>question.id===questionId))) {
+     const button=document.createElement('button'); button.type='button'; button.className='text-link-action'; button.textContent='在资料库查看原题';
+     button.addEventListener('click',()=>openPracticeSource(questionId)); el.append(button);
+   }
+ }
+
+ function openPracticeSource(questionId) {
+   const role=state.role;
+   const source=state.sources.find(item=>item.role===state.role && (item.questions || []).some(question=>question.id===questionId));
+   if(!source) { toast.error('原题已不可用，请刷新后查看'); return; }
+   const scope=$('#library-role-scope'); if(scope) scope.value='current';
+   activeFilter='all';
+   $$('.filter-pill').forEach(pill=>{const selected=pill.dataset.filter==='all';pill.classList.toggle('active',selected);pill.setAttribute('aria-pressed',String(selected));});
+   renderSources(); switchTab('library');
+   const target=document.getElementById('library-question-'+questionId);
+   requestAnimationFrame(()=>{if(state.role===role && window.location.hash==='#library' && target?.isConnected) {target.scrollIntoView({behavior:'instant',block:'center'});target.focus();}});
  }
 
  function clearPracticeHelp() {
@@ -1513,6 +1541,7 @@ const sourceExtraction = createSourceExtraction({api, getSource:id=>state.source
      const result = await api('/api/practice/dialogue/' + encodeURIComponent(id) + '?role=' + encodeURIComponent(role));
      if (dialogueRevision !== revision || state.role !== role || $('#question').value !== currentQuestion || $('#answer').value !== currentAnswer) return;
      dialogue = {role,turns:result.turns || [],origin:result.origin || 'user',summary:result.summary || '',sourceAvailable:result.source_available,generation:null};
+     if (typeof renderQuestionContext === 'function') renderQuestionContext();
      renderDialogue();
      if (dialogue.summary) dialogueStatus('已恢复本题总结。');
      else if (dialogue.turns.length) dialogueStatus('已恢复本题对话与当前岗位草稿。');
@@ -1590,7 +1619,7 @@ const sourceExtraction = createSourceExtraction({api, getSource:id=>state.source
      dialogue.generation = null; dialogueRequest = null;
      try { sessionStorage.removeItem('practice-generated:' + role); sessionStorage.removeItem('practice-request:' + role); sessionStorage.setItem('practice-dialogue:' + role, JSON.stringify({id:result.id})); } catch {}
      const canFollow = result.follow_up && dialogue.turns.length < 8;
-     if (canFollow) { $('#question').value = result.follow_up; setQuestionContext({text:result.follow_up,parentId:result.id}); }
+     if (canFollow) { const sourceQuestionId=questionContext?.sourceQuestionId || (questionContext?.questionRef?.kind==='source' ? questionContext.questionRef.id : ''); $('#question').value = result.follow_up; setQuestionContext({text:result.follow_up,parentId:result.id,sourceQuestionId}); }
      $('#answer').value = ''; $('#answer-char-count').textContent = '0 字';
      dialogueBusy = false; renderDialogue();
      dialogueStatus(canFollow ? '可以继续回答 AI 追问，也可以结束并总结。' : dialogue.turns.length >= 8 ? '本题已达到 8 轮上限，请结束并总结。' : '本题暂时没有更多追问，可以结束并总结。');

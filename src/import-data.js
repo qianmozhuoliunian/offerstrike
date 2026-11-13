@@ -1,4 +1,5 @@
 import { validateSource, validateDate } from './core.js';
+import { randomUUID } from 'node:crypto';
 import { validateStoredCoaching } from './coaching.js';
 
 // Existing records win on conflicts; validation happens before any writes.
@@ -52,6 +53,10 @@ export function importData(db, data, commit = false) {
       const compatible=acceptedSources.has(sourceId) && (!existingQuestion || (existingQuestion.source_id===sourceId && existingQuestion.text===q.text));
       if(compatible) compatibleQuestionRefs.set('source:'+qid,{role:source.role,text:q.text});
       add(!compatible || !!existingQuestion,'INSERT INTO questions (id,source_id,text,created,note) VALUES (?,?,?,?,?)',args);
+      const evidence=text(q.evidence ?? '',1000,'原文依据');
+      const evidenceQuestion=text(q.evidence_question ?? '',10000,'依据对应题目');
+      if (!!evidence !== !!evidenceQuestion || (evidence && (!evidence.trim() || !evidenceQuestion.trim()))) throw Error('备份中的原文依据无效');
+      if(evidence) add(!compatible || !!db.prepare('SELECT 1 FROM question_evidence WHERE question_id=?').get(qid),'INSERT INTO question_evidence (question_id,evidence,confirmed_text,request_id) VALUES (?,?,?,?)',[qid,evidence,evidenceQuestion,randomUUID()]);
       const topic=text(q.topic ?? '',100,'主题').trim();
       if(topic) add(!compatible || !!db.prepare("SELECT 1 FROM question_topics WHERE kind='source' AND question_id=?").get(qid),'INSERT INTO question_topics (kind,question_id,topic) VALUES (?,?,?)',['source',qid,topic]);
     }

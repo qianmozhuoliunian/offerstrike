@@ -1,4 +1,5 @@
 import { createToast } from './ui/toast.js';
+import { createSourceExtraction } from './ui/source-extraction.js';
 
  /**
   * 见面 · 面试准备助手 (Apple HIG Design System Implementation)
@@ -71,6 +72,7 @@ import { createToast } from './ui/toast.js';
  }
 
 const toast = createToast(escapeHtml);
+const sourceExtraction = createSourceExtraction({api, getSource:id=>state.sources.find(source=>source.id===id), refresh, escapeHtml, toast});
 
  /* ==========================================================================
    Tab Navigation Architecture (Emil's Blur Crossfade Masking)
@@ -335,6 +337,7 @@ const toast = createToast(escapeHtml);
              ${questions.length ? questions.map(q => `
                <div class="source-question-row">
                   <div class="source-question-content"><div class="source-question-text">${escapeHtml(q.text)}</div>
+                    ${q.evidence ? `<details class="question-evidence"><summary>AI 整理 · 查看原文依据${q.evidence_question !== q.text ? '（题目已修改，请重新核对）' : ''}</summary><blockquote>${escapeHtml(q.evidence)}</blockquote><p>摘录来自用户粘贴的内容，请核对原帖与题意。</p></details>` : ''}
                     ${topicEditor('source',q.id,s.id,q.topic)}
                    <details class="question-note"><summary>个人笔记${q.note ? ' · 已保存' : ''}</summary>
                      <form class="note-form" data-note-form="${escapeHtml(q.id)}" data-source-id="${escapeHtml(s.id)}">
@@ -346,6 +349,7 @@ const toast = createToast(escapeHtml);
                  <button type="button" class="action-pill-btn primary" data-practice="${escapeHtml(q.id)}">练习这题</button>
                </div>`).join('') : '<p class="source-question-empty">暂无确认题目，可以从原文摘录后添加。</p>'}
              ${legacy ? `<div class="legacy-question"><strong>旧内容 · 待核实</strong><p>${escapeHtml(legacy)}</p><p>旧内容可能是搜索摘要，请核对原文后再作为题目保存。</p><button type="button" class="text-link-action" data-copy-legacy="${escapeHtml(s.id)}">复制到题目输入框</button></div>` : ''}
+             ${sourceExtraction.render(s)}
              <details class="add-question-panel">
                <summary>＋ 添加关联题目</summary>
                <form class="add-question-form" data-question-form="${escapeHtml(s.id)}">
@@ -942,7 +946,7 @@ const toast = createToast(escapeHtml);
     const deleteBtn = e.target.closest('[data-delete]');
     if (deleteBtn) {
       const id = deleteBtn.dataset.delete;
-      if (questionSaveStates.get(id) === 'saving') { toast.error('请等待题目保存完成后再移除来源'); return; }
+      if (questionSaveStates.get(id) === 'saving' || sourceExtraction.isBusy(id)) { toast.error('请等待题目保存或提取完成后再移除来源'); return; }
       if (!deleteBtn.classList.contains('confirming')) {
         deleteBtn.classList.add('confirming');
         deleteBtn.textContent = '确认移除来源及题目？';
@@ -957,6 +961,7 @@ const toast = createToast(escapeHtml);
 
        try {
          await api('/api/sources/' + id, 'DELETE');
+         sourceExtraction.forget(id);
          questionDrafts.delete(id);
          questionSaveStates.delete(id);
          await refresh();
@@ -980,6 +985,7 @@ const toast = createToast(escapeHtml);
 
  $('#attempt-role-scope').addEventListener('change', renderAttempts);
 
+ if (sourcesContainer) sourceExtraction.attach(sourcesContainer);
 
  // Library Category Filter Pills
  $$('.filter-pill').forEach(pill => {

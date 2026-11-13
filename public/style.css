@@ -1904,6 +1904,21 @@ input[type=checkbox]:focus-visible {
 .source-question-text { color: var(--apple-text-primary); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .source-question-row button { flex-shrink: 0; }
 .source-question-empty { margin: 10px 0; color: var(--apple-text-secondary); font-size: 13px; }
+.ai-extract-panel { margin-top: 14px; border: 1px solid var(--lens-border); border-radius: 10px; background: #f8faff; }
+.ai-extract-panel > summary { cursor: pointer; padding: 12px 14px; color: var(--lens-primary); font-weight: 650; }
+.ai-extract-body { display: grid; gap: 10px; padding: 0 14px 14px; }
+.ai-extract-body > p, .ai-candidates > p, .ai-extract-actions span, .ai-extract-status, .question-evidence p { color: var(--lens-text-secondary); font-size: 13px; line-height: 1.6; }
+.ai-extract-body label, .ai-candidate label { color: var(--lens-text-primary); font-size: 13px; font-weight: 600; }
+.ai-extract-body textarea { width: 100%; min-width: 0; }
+.ai-extract-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.ai-candidates { display: grid; gap: 10px; }
+.ai-candidate { display: grid; gap: 8px; padding: 14px; background: #fff; border: 1px solid var(--lens-border); border-radius: 9px; }
+.ai-candidate button { justify-self: start; }
+.ai-evidence-label { color: var(--lens-text-secondary); font-size: 13px; font-weight: 600; }
+.ai-candidate blockquote, .question-evidence blockquote { margin: 0; padding: 10px 12px; border-left: 3px solid #aec4ef; background: #f2f6ff; color: var(--lens-text-primary); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.question-evidence { margin-top: 8px; font-size: 13px; }
+.question-evidence summary { cursor: pointer; color: var(--apple-blue); }
+.question-evidence blockquote, .question-evidence p { margin-top: 8px; }
 .legacy-question { margin: 12px 0; padding: 12px; background: var(--lens-warning-tint); border-radius: 8px; font-size: 13px; color: var(--lens-warning); }
 .legacy-question p { margin-top: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .legacy-question button { margin-top: 8px; }

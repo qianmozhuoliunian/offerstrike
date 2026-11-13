@@ -49,7 +49,7 @@ test('HTTP workflow validates JD output, isolates roles, imports safely and reje
     const base=`http://127.0.0.1:${port}`;
     // The process runs from a temporary data directory; assets must still resolve
     // from the application directory, including modules imported by the page.
-    for (const [path, contentType] of [['/', 'text/html'], ['/app.js', 'text/javascript'], ['/ui/toast.js', 'text/javascript'], ['/style.css', 'text/css']]) {
+    for (const [path, contentType] of [['/', 'text/html'], ['/app.js', 'text/javascript'], ['/ui/toast.js', 'text/javascript'], ['/ui/source-extraction.js', 'text/javascript'], ['/style.css', 'text/css']]) {
       const asset = await fetch(base + path);
       assert.equal(asset.status, 200, path);
       assert.match(asset.headers.get('content-type'), new RegExp(contentType), path);

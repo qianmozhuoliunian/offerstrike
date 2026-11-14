@@ -9,6 +9,7 @@ files:
   - src/**
   - server.js
   - package.json
+  - LICENSE
 win:
   signAndEditExecutable: false
   target:

@@ -2,6 +2,7 @@ import { createToast } from './ui/toast.js';
 import { createSourceExtraction } from './ui/source-extraction.js';
 import { mountAgentWorkflow } from './ui/agent-workflow.js';
 import { mountDesktopSettings } from './ui/desktop-controls.js';
+import { renderGettingStarted } from './ui/getting-started.js';
 
  /**
   * 见面 · 面试准备助手 (Apple HIG Design System Implementation)
@@ -210,6 +211,7 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
 
  const globalAddBtn = $('#global-add-btn');
  if (globalAddBtn) globalAddBtn.addEventListener('click', openModal);
+ $('#getting-started-add')?.addEventListener('click', openModal);
 
  const toggleAddBtn = $('#toggle-add');
  if (toggleAddBtn) toggleAddBtn.addEventListener('click', openModal);
@@ -238,6 +240,7 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
     ========================================================================== */
 
  function render() {
+   renderGettingStarted(state);
    renderReturnPractice();
    // Form inputs & Topbar badges
    const roleInput = $('#role');
@@ -832,6 +835,9 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
    if (next === 'jd') {
      $('#jd-text').focus();
      $('#jd-text').scrollIntoView({behavior:'smooth', block:'center'});
+     } else if (next === 'source') {
+       switchTab('library');
+       openModal();
    } else {
      switchTab(next);
    }
@@ -1736,7 +1742,9 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
  function renderReturnPractice() {
    const panel=$('#return-practice');
    if (!panel) return;
-   panel.hidden=!state.role;
+   const hasQuestions = state.sources.some(source=>source.role===state.role && source.questions?.length) ||
+     (state.debriefs || []).some(item=>item.role===state.role && item.include_in_library);
+   panel.hidden=!state.role || (!hasQuestions && !state.draft?.question?.trim());
    const draft=state.draft?.question?.trim() || '';
    $('#resume-draft').hidden=!draft;
    $('#return-draft').textContent=draft ? '已保留草稿：'+draft : '查看当前岗位的下一道推荐题。';

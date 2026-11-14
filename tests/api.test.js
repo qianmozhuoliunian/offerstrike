@@ -65,6 +65,18 @@ test('HTTP workflow validates JD output, isolates roles, imports safely and reje
     }
     const post=(path,data,extra={})=>fetchWorkbench(base+path,{method:'POST',headers:{'content-type':'application/json',...extra},body:JSON.stringify(data)});
     const denied=await post('/api/role',{role:'恶意修改'},{origin:'https://evil.example'});
+    // A missing allowlisted ES module prevents the whole UI from starting.
+    const modules = new Set(['/app.js']);
+    for (const path of modules) {
+      const response = await fetchWorkbench(base+path);
+      assert.equal(response.status,200,`UI module must be served: ${path}`);
+      assert.match(response.headers.get('content-type'),/text\/javascript/);
+      for (const match of (await response.text()).matchAll(/\bimport\s+[^;]*?\s+from\s+['"]([^'"]+)['"]/g)) {
+        const dependency = new URL(match[1],base+path);
+        assert.equal(dependency.origin,base,'UI imports stay local');
+        modules.add(dependency.pathname);
+      }
+    }
     assert.equal(denied.status,403);
     const wrongType=await fetchWorkbench(base+'/api/role',{method:'POST',headers:{'content-type':'text/plain'},body:'{"role":"恶意修改"}'});
     assert.equal(wrongType.status,403);

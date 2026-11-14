@@ -293,6 +293,7 @@ const files = {
   '/ui/source-extraction.js': [new URL('./public/ui/source-extraction.js', import.meta.url), 'text/javascript'],
   '/ui/agent-workflow.js': [new URL('./public/ui/agent-workflow.js', import.meta.url), 'text/javascript'],
   '/ui/desktop-controls.js': [new URL('./public/ui/desktop-controls.js', import.meta.url), 'text/javascript'],
+  '/ui/getting-started.js': [new URL('./public/ui/getting-started.js', import.meta.url), 'text/javascript'],
   '/assets/interview-study-illustration.png': [new URL('./public/assets/interview-study-illustration.png', import.meta.url), 'image/png'],
   '/assets/interview-discover.png': [new URL('./public/assets/interview-discover.png', import.meta.url), 'image/png'],
   '/assets/interview-practice.png': [new URL('./public/assets/interview-practice.png', import.meta.url), 'image/png'],

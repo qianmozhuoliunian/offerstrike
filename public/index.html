@@ -148,6 +148,16 @@
           <div class="agent-actions"><button type="button" class="apple-btn apple-btn-secondary" id="resume-draft" data-tab="practice" hidden>继续上次草稿</button><button type="button" class="apple-btn apple-btn-primary" id="today-practice">看看今天练什么</button></div>
           <p id="today-practice-status" role="status"></p>
         </section>
+        <section class="agent-panel" id="getting-started" aria-labelledby="getting-started-title" hidden>
+          <h2 id="getting-started-title">开始第一轮准备</h2>
+          <p id="getting-started-description"></p>
+          <div class="agent-actions">
+            <button type="button" class="apple-btn apple-btn-primary" id="getting-started-next" data-tab="role">设置目标岗位</button>
+            <button type="button" class="apple-btn apple-btn-secondary" id="getting-started-add" hidden>录入已有面经链接</button>
+          </div>
+          <p id="getting-started-services"></p>
+          <button type="button" class="text-link-action" data-tab="settings">查看搜索和 AI 配置</button>
+        </section>
         <section class="feature-section" aria-labelledby="feature-heading">
           <div class="feature-heading"><h2 id="feature-heading">开始<span class="section-keyword">准备</span></h2></div>
           <div class="feature-grid">
@@ -200,7 +210,7 @@
         <section class="section-block">
           <div class="card role-jd-panel">
             <div class="role-jd-heading"><h2 class="card-title">岗位描述与要求 <span class="role-optional">选填</span></h2>
-            <p class="card-subtitle">不同岗位分别保存；搜索和点评时，已确认的要求会发送给相应服务。</p></div>
+            <p class="card-subtitle">不同岗位分别保存；AI 点评会使用已确认的要求，面经搜索不发送岗位描述或要求。</p></div>
             <form id="jd-form" class="jd-form">
               <div class="jd-editor-grid">
                 <div class="form-group jd-editor">
@@ -242,6 +252,7 @@
             </div>
           </div>
 
+          <p id="search-config-hint" class="agent-panel" hidden>搜索服务尚未配置。可以先在资料库录入已有原帖链接并整理题目。<button type="button" class="text-link-action" data-tab="settings">查看服务配置</button></p>
           <form id="search-form" class="apple-form-vertical">
             <div class="form-grid">
               <div class="form-group">
@@ -348,6 +359,7 @@
             <span class="practice-step-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v11H9l-5 4V5Z"/><path d="M8 9h8M8 12h5"/></svg></span>
           </div>
 
+          <p id="practice-config-hint" class="agent-panel" hidden>AI 尚未配置。写好回答后选「仅保存作答」，仍可自评并安排复习；点评、提示与追问需先配置 AI。<button type="button" class="text-link-action" data-tab="settings">查看服务配置</button></p>
           <form id="review-form" class="apple-form-vertical">
             <div class="form-group">
               <div class="label-split">
@@ -587,8 +599,8 @@
   <h2 id="role-next-title">接下来想做什么？</h2>
   <p id="role-next-description">可以先找面经、开始练习，也可以补充岗位描述，让后续准备更有针对性。</p>
   <div class="role-next-actions">
-    <button type="button" class="role-next-choice" data-next="search"><strong>搜索面经 <span aria-hidden="true">→</span></strong><span>按目标岗位查找公开资料</span></button>
-    <button type="button" class="role-next-choice" data-next="practice"><strong>开始练习 <span aria-hidden="true">→</span></strong><span>输入问题与回答，获取点评</span></button>
+    <button type="button" class="role-next-choice" id="role-next-find" data-next="search"><strong>搜索面经 →</strong><span>按目标岗位查找公开资料</span></button>
+    <button type="button" class="role-next-choice" data-next="practice"><strong>开始练习 <span aria-hidden="true">→</span></strong><span>保存回答并自评，AI 点评可选</span></button>
     <button type="button" class="role-next-choice" data-next="jd"><strong>补充岗位描述 <span aria-hidden="true">→</span></strong><span>填写 JD 和已确认的要求（选填）</span></button>
   </div>
   <button type="button" class="apple-btn apple-btn-secondary role-next-later" id="role-next-later">稍后再说</button>

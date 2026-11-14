@@ -51,13 +51,12 @@ export function readDialogue(db, role, attemptId) {
   return { turns: turns.map(({id,question,answer,feedback,follow_up,coaching_focus,coaching_evidence,coaching_next_step}) => ({id,question,answer,feedback,follow_up,coaching:coaching_focus ? {focus:coaching_focus,evidence:coaching_evidence,next_step:coaching_next_step} : null})), origin: ['source','debrief','ai'].includes(origin) ? origin : 'user', source_available:sourceAvailable, summary };
 }
 
-export function createDialogueApi({ db, currentRole, getProfile, aiRequestOptions }) {
+export function createDialogueApi({ db, currentRole, getProfile, requestAi }) {
   async function modelRequest(system, payload, field, label) {
-    if (!process.env.AI_API_KEY || !process.env.AI_MODEL) throw Error('尚未配置 AI 服务，暂时无法使用对话复习');
+    if (!requestAi) throw Error('尚未配置可用的 AI 服务，暂时无法使用对话复习');
     const input = JSON.stringify(payload);
     if (input.length > MAX_CONTEXT) throw Error(`本题对话和岗位要求合计不能超过 ${MAX_CONTEXT} 字；请结束当前对话或精简内容`);
-    const base = (process.env.AI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
-    const response = await fetch(`${base}/chat/completions`, {method:'POST',signal:AbortSignal.timeout(45000),headers:{'content-type':'application/json','authorization':`Bearer ${process.env.AI_API_KEY}`},body:JSON.stringify({...aiRequestOptions(base),model:process.env.AI_MODEL,response_format:{type:'json_object'},messages:[{role:'system',content:system},{role:'user',content:input}],temperature:0.4})});
+    const response = await requestAi({response_format:{type:'json_object'},messages:[{role:'system',content:system},{role:'user',content:input}],temperature:0.4},AbortSignal.timeout(45000));
     if (!response.ok) throw Error('AI 服务暂不可用，请检查配置或稍后重试');
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;

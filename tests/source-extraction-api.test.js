@@ -1,3 +1,4 @@
+import { workbenchClient } from './fixtures/local-workbench.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -30,18 +31,20 @@ test('extraction sends only supplied text, requires evidence and saves only on c
   const allocator=http.createServer(); await new Promise(resolve=>allocator.listen(0,'127.0.0.1',resolve));
   const port=allocator.address().port; await new Promise(resolve=>allocator.close(resolve));
   const child=spawn(process.execPath,[fileURLToPath(new URL('../server.js',import.meta.url))],{
-    cwd:temp,env:{...process.env,PORT:String(port),AI_API_KEY:'fake',AI_MODEL:'test',AI_BASE_URL:`http://127.0.0.1:${model.address().port}`},stdio:['ignore','pipe','pipe']
+    cwd:temp,env:{...process.env,INTERVIEW_DATA_DIR:join(temp,'data'),PORT:String(port),AI_API_KEY:'fake',AI_MODEL:'test',AI_BASE_URL:`http://127.0.0.1:${model.address().port}`},stdio:['ignore','pipe','pipe']
   });
   let stderr=''; child.stderr.on('data',chunk=>stderr+=chunk);
+  let output=''; child.stdout.on('data',chunk=>output+=chunk);
   try {
     let info; const deadline=Date.now()+10000;
-    while(!info) {
+    while(!info || !output.includes('#access=')) {
       if(child.exitCode!==null || Date.now()>deadline) throw Error(`server did not start: ${stderr}`);
       try {info=JSON.parse(await readFile(join(temp,'data','server.json'),'utf8'));}
       catch {await new Promise(resolve=>setTimeout(resolve,30));}
     }
-    const send=(path,method,data)=>fetch(info.url+path,{method,headers:{'content-type':'application/json'},body:data===undefined ? undefined : JSON.stringify(data)});
-    const state=async()=>(await (await fetch(info.url+'/api/state')).json());
+    const fetchWorkbench=workbenchClient(output);
+    const send=(path,method,data)=>fetchWorkbench(info.url+path,{method,headers:{'content-type':'application/json'},body:data===undefined ? undefined : JSON.stringify(data)});
+    const state=async()=>(await (await fetchWorkbench(info.url+'/api/state')).json());
     const source=await (await send('/api/sources','POST',{title:'未发送的标题',url:'https://example.org/post',role:'未发送的岗位',type:'来源未知'})).json();
     const path=`/api/sources/${source.id}/extract-questions`;
     const savePath=`/api/sources/${source.id}/extracted-questions`;
@@ -78,7 +81,7 @@ test('extraction sends only supplied text, requires evidence and saves only on c
     assert.equal((await send(`/api/sources/${source.id}/questions/${question.id}`,'PUT',{text:'后来编辑的问题'})).status,200);
     stored=(await state()).sources[0].questions;
     assert.equal(stored[0].text,'后来编辑的问题'); assert.equal(stored[0].evidence_question,confirmed.text);
-    const exported=await (await fetch(info.url+'/api/export')).json();
+    const exported=await (await fetchWorkbench(info.url+'/api/export')).json();
     assert.doesNotMatch(JSON.stringify(exported),/用户粘贴的其他内容不应存入备份/);
     assert.match(JSON.stringify(exported),/面试官问：如何设计缓存/);
 

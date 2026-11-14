@@ -1,11 +1,15 @@
 import asyncio
+import hmac
 import os
+import re
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone
 from typing import Annotated, Literal
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -50,18 +54,37 @@ class SearchResponse(BaseModel):
     results: list[Candidate]
 
 
-def create_app(*, transport=None, keys=None):
+def create_app(*, transport=None, keys=None, token=None):
     @asynccontextmanager
     async def lifespan(app):
         app.state.keys = keys if keys is not None else {
             "Tavily": os.getenv("TAVILY_API_KEY"),
             "Exa": os.getenv("EXA_API_KEY"),
         }
+        app.state.token = token if token is not None else os.getenv("RESEARCH_SERVICE_TOKEN", "")
         async with httpx.AsyncClient(transport=transport, timeout=12, follow_redirects=False) as client:
             app.state.client = client
             yield
 
-    app = FastAPI(title="面经研究检索", lifespan=lifespan)
+    app = FastAPI(title="面经研究检索", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+
+    @app.middleware("http")
+    async def require_token(request: Request, call_next):
+        if request.url.path.rstrip("/") == "/v1/retrieve":
+            expected = request.app.state.token
+            if not re.fullmatch(r"[a-f0-9]{64}", expected):
+                return JSONResponse({"detail": "未配置研究服务访问凭证"}, status_code=503)
+            received = request.headers.get("x-offerpilot-retrieval", "")
+            if not hmac.compare_digest(received.encode("utf-8"), expected.encode("utf-8")):
+                return JSONResponse({"detail": "研究服务访问凭证无效"}, status_code=401)
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid_request(_request: Request, _error: RequestValidationError):
+        return JSONResponse({"detail": "检索请求格式无效"}, status_code=422)
+
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
 
     @app.get("/health")

@@ -1,3 +1,4 @@
+import { workbenchClient } from './fixtures/local-workbench.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -38,18 +39,20 @@ test('role validation protects saving, searching, old data and explicit confirma
   const port=allocate.address().port; await new Promise(resolve=>allocate.close(resolve));
   const fixture=new URL('./fixtures/mock-search-provider.mjs',import.meta.url).href;
   const child=spawn(process.execPath,['--import',fixture,fileURLToPath(new URL('../server.js',import.meta.url))],{
-    cwd:temp, env:{...process.env,PORT:String(port),AI_API_KEY:'mock-key',AI_MODEL:'mock-model',AI_BASE_URL:`http://127.0.0.1:${model.address().port}`,TAVILY_API_KEY:'mock-key'},stdio:['ignore','pipe','pipe']
+    cwd:temp, env:{...process.env,INTERVIEW_DATA_DIR:join(temp,'data'),PORT:String(port),AI_API_KEY:'mock-key',AI_MODEL:'mock-model',AI_BASE_URL:`http://127.0.0.1:${model.address().port}`,TAVILY_API_KEY:'mock-key'},stdio:['ignore','pipe','pipe']
   });
   let stderr=''; child.stderr.on('data',chunk=>stderr+=chunk);
+  let output=''; child.stdout.on('data',chunk=>output+=chunk);
   try {
     let info; const deadline=Date.now()+10000;
-    while(!info) {
+    while(!info || !output.includes('#access=')) {
       if(child.exitCode!==null || Date.now()>deadline) throw Error(`server did not start: ${stderr}`);
       try { info=JSON.parse(await readFile(join(temp,'data','server.json'),'utf8')); }
       catch { await new Promise(resolve=>setTimeout(resolve,30)); }
     }
-    const post=(path,data)=>fetch(info.url+path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
-    const state=async()=>await (await fetch(info.url+'/api/state')).json();
+    const fetchWorkbench=workbenchClient(output);
+    const post=(path,data)=>fetchWorkbench(info.url+path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
+    const state=async()=>await (await fetchWorkbench(info.url+'/api/state')).json();
     const backup={version:1,settings:[{key:'role',value:'科比'}],profiles:[{role:'科比',jd:'旧岗位描述',confirmed_requirements:'旧岗位要求'}],sources:[],attempts:[],drafts:[{role:'科比',question:'旧问题',answer:'旧回答',updated:'2026-01-01'}],debriefs:[]};
     assert.equal((await post('/api/import',{mode:'merge',data:backup})).status,200);
     assert.equal((await state()).roleValidation,'unverified');
@@ -109,7 +112,7 @@ test('role validation protects saving, searching, old data and explicit confirma
     assert.equal((await post('/api/role',{role:'篮球运动员'})).status,200);
     assert.equal((await post('/api/role',{role:'AI',confirmation_token:oldToken.confirmation_token})).status,400);
     assert.equal((await state()).role,'篮球运动员');
-    const exported=await (await fetch(info.url+'/api/export')).json();
+    const exported=await (await fetchWorkbench(info.url+'/api/export')).json();
     assert.equal(exported.settings.length,1);
     assert.equal(exported.profiles.find(item=>item.role==='科比').jd,'旧岗位描述');
     assert.equal(exported.drafts.find(item=>item.role==='科比').answer,'旧回答');

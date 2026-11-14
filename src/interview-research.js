@@ -11,7 +11,7 @@ const platforms = {nowcoder:'牛客',juejin:'掘金',zhihu:'知乎',csdn:'CSDN',
 export async function fetchCandidates(fetcher, provider, key, request, signal) {
   const exa = provider === 'Exa';
   const response = await fetcher(exa ? 'https://api.exa.ai/search' : 'https://api.tavily.com/search', {
-    method: 'POST',
+    method: 'POST', redirect:'error',
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS),
     headers: {'content-type':'application/json', ...(exa ? {'x-api-key':key} : {authorization:`Bearer ${key}`})},
     body: JSON.stringify(request)
@@ -82,7 +82,7 @@ export function createInterviewResearch({tavilyKey, exaKey, fetcher = fetch, req
         ...(retrieve ? {engine:'fastapi'} : {})};
       if (failures === requests) return {unavailable:true, retrieval,
         error:retrieve
-          ? 'Python 研究服务未能完成检索，请确认 FastAPI 已启动，并检查搜索密钥、网络和服务额度。也可以手动添加来源。'
+          ? 'Python 研究服务未能完成检索，请确认 FastAPI 已启动、访问凭证一致，并检查搜索密钥、网络和服务额度。也可以手动添加来源。'
           : `${used.join(' 和 ')} 检索失败，请检查网络、密钥和服务额度后重试，也可以手动添加来源。`};
 
       const relevant = shortlist();

@@ -79,9 +79,11 @@ test('handles failed providers, Exa alone, and the unlimited date range', async 
 test('the FastAPI path sends only search scope, preserves fallback and does not call providers directly', async () => {
   const calls = [];
   let serviceDown = false;
-  const retrieve = createFastApiRetrieval('http://127.0.0.1:8091', async (url, options) => {
+  const token = 'a'.repeat(64);
+  const retrieve = createFastApiRetrieval('http://127.0.0.1:8091', token, async (url, options) => {
     assert.equal(String(url), 'http://127.0.0.1:8091/v1/retrieve');
     assert.equal(options.redirect, 'error');
+    assert.equal(options.headers['x-offerpilot-retrieval'],token);
     const query = JSON.parse(options.body);
     calls.push(query);
     if (serviceDown || query.provider === 'Tavily') return Response.json({detail:'unavailable'}, {status:502});

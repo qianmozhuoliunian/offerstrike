@@ -1,4 +1,4 @@
-export function createFastApiRetrieval(address, fetcher = fetch) {
+export function createFastApiRetrieval(address, token, fetcher = fetch) {
   const base = new URL(address);
   if (base.protocol !== 'http:' || base.hostname !== '127.0.0.1' ||
       base.username || base.password || base.pathname !== '/' || base.search || base.hash) {
@@ -6,9 +6,10 @@ export function createFastApiRetrieval(address, fetcher = fetch) {
   }
   const endpoint = new URL('/v1/retrieve', base);
   return async ({provider, role, company, domains, phrase, from, today}) => {
+    if (!/^[a-f0-9]{64}$/.test(token || '')) throw Error('请为 Node 和 FastAPI 配置同一研究服务访问凭证');
     const response = await fetcher(endpoint, {
       method:'POST', redirect:'error', signal:AbortSignal.timeout(13_000),
-      headers:{'content-type':'application/json'},
+      headers:{'content-type':'application/json','x-offerpilot-retrieval':token},
       body:JSON.stringify({provider, role, company, domains, phrase,
         from_date:from ?? null, through_date:from ? today : null})
     });

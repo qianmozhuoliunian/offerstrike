@@ -1,5 +1,16 @@
 .env
+.env.*
+!.env.example
 data/
+*.sqlite
+*.sqlite3
+*.db
+*.sqlite-*
+*.sqlite3-*
+*.db-*
+interview-data*.json
+services.enc*
+*.log
 node_modules/
 .venv/
 __pycache__/

@@ -9,6 +9,8 @@ from research_service.main import create_app
 QUERY = dict(provider="Tavily", role="产品经理", company="示例公司",
              domains=["nowcoder.com"], phrase="面经",
              from_date="2025-01-01", through_date="2025-12-31")
+TOKEN = "a" * 64
+AUTH = {"x-offerpilot-retrieval": TOKEN}
 
 
 @pytest.mark.parametrize("provider,phrase", [("Tavily", "面经"), ("Exa", "面试经历")])
@@ -32,8 +34,8 @@ def test_retrieval_uses_provider_credentials_and_preserves_scope(provider, phras
         return httpx.Response(200, json={"results": [
             None, dict(title="面经", url="https://www.nowcoder.com/discuss/1", **excerpt)]})
 
-    with TestClient(create_app(transport=httpx.MockTransport(upstream), keys={provider: "mock-key"}),
-                    base_url="http://127.0.0.1") as client:
+    with TestClient(create_app(transport=httpx.MockTransport(upstream), keys={provider: "mock-key"}, token=TOKEN),
+                    base_url="http://127.0.0.1", headers=AUTH) as client:
         assert client.get("/health").json() == {"providers": [provider]}
         result = client.post("/v1/retrieve", json={**QUERY, "provider": provider, "phrase": phrase})
         assert result.status_code == 200
@@ -50,9 +52,11 @@ def test_rejects_invalid_or_unexpected_input_without_upstream(extra):
     def upstream(_):
         pytest.fail("invalid input was sent upstream")
 
-    with TestClient(create_app(transport=httpx.MockTransport(upstream), keys={"Tavily": "mock"}),
-                    base_url="http://127.0.0.1") as client:
-        assert client.post("/v1/retrieve", json={**QUERY, **extra}).status_code == 422
+    with TestClient(create_app(transport=httpx.MockTransport(upstream), keys={"Tavily": "mock"}, token=TOKEN),
+                    base_url="http://127.0.0.1", headers=AUTH) as client:
+        invalid = client.post("/v1/retrieve", json={**QUERY, **extra})
+        assert invalid.status_code == 422
+        assert "私人内容" not in invalid.text
         assert client.post("/v1/retrieve", headers={"Host": "example.com"}, json=QUERY).status_code == 400
 
 
@@ -66,8 +70,20 @@ def test_reports_provider_errors_without_exposing_credentials(mode, status):
         return httpx.Response(503, text="private-key") if mode == "upstream" else httpx.Response(200, json={})
 
     with TestClient(create_app(transport=httpx.MockTransport(upstream),
-                               keys={} if mode == "missing" else {"Tavily": "private-key"}),
-                    base_url="http://127.0.0.1") as client:
+                               keys={} if mode == "missing" else {"Tavily": "private-key"}, token=TOKEN),
+                    base_url="http://127.0.0.1", headers=AUTH) as client:
         response = client.post("/v1/retrieve", json=QUERY)
         assert response.status_code == status
         assert "private-key" not in response.text
+
+
+@pytest.mark.parametrize("token,received,status", [("", "", 503), (TOKEN, "", 401), (TOKEN, "wrong", 401)])
+def test_requires_configured_local_access_token(token, received, status):
+    def upstream(_):
+        pytest.fail("unauthorized request reached upstream")
+
+    with TestClient(create_app(transport=httpx.MockTransport(upstream), keys={"Tavily": "mock"}, token=token),
+                    base_url="http://127.0.0.1") as client:
+        response = client.post("/v1/retrieve", json=QUERY, headers={"x-offerpilot-retrieval": received})
+        assert response.status_code == status
+        assert TOKEN not in response.text

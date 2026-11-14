@@ -62,8 +62,51 @@ import { mountDesktopSettings } from './ui/desktop-controls.js';
    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
  }[c]));
 
+ const accessHash = /^#access=([a-f0-9]{64})$/;
+ const accessHeaders = (() => {
+   if (window.offerPilotDesktop) return {};
+   const access = accessHash.exec(location.hash)?.[1];
+   if (access) history.replaceState(null, '', location.pathname);
+   try {
+     if (access) sessionStorage.setItem('offerpilot-access', access);
+     return {'x-offerpilot-access':access || sessionStorage.getItem('offerpilot-access') || ''};
+   } catch { return {'x-offerpilot-access':access || ''}; }
+ })();
+
+ // Remove legacy copies of questions, source notes and entire draft answers.
+ try {
+   for (const key of Object.keys(sessionStorage)) {
+     if (/^practice-(context|dialogue|generated|request):/.test(key)) sessionStorage.removeItem(key);
+   }
+ } catch {}
+ document.querySelectorAll('form').forEach(form=>form.setAttribute('autocomplete','off'));
+
+ async function fetchLocal(path, options = {}) {
+   const response = await fetch(path, {...options,headers:{...options.headers,...accessHeaders}});
+   if (response.status === 401) {
+     const error = Error('请从启动终端复制完整的本机工作台链接打开。');
+     error.status = 401;
+     throw error;
+   }
+   return response;
+ }
+
+ $('#export-data')?.addEventListener('click', async event => {
+   const button = event.currentTarget;
+   button.disabled = true;
+   try {
+     const response = await fetchLocal('/api/export');
+     if (!response.ok) throw Error('导出失败，请稍后重试');
+     const url = URL.createObjectURL(await response.blob());
+     const link = document.createElement('a');
+     link.href = url; link.download = 'interview-data.json'; link.click();
+     setTimeout(()=>URL.revokeObjectURL(url),1000);
+   } catch(error) { toast.error(error.message); }
+   finally { button.disabled = false; }
+ });
+
  async function api(path, method = 'GET', data, signal) {
-   const r = await fetch(path, {
+   const r = await fetchLocal(path, {
      method,
       signal,
      headers: { 'content-type': 'application/json' },
@@ -115,6 +158,7 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
  }
 
  window.addEventListener('hashchange', () => {
+   if (!window.offerPilotDesktop && accessHash.test(location.hash)) {location.reload();return;}
    const hash = window.location.hash.slice(1);
    if (hash && tabTitles[hash] && !$('#pane-' + hash)?.classList.contains('active')) {
      switchTab(hash);
@@ -211,8 +255,7 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
      $('#answer-char-count').textContent = `${$('#answer').value.length} 字`;
      $('#draft-status').textContent = state.role ? '已恢复本岗位草稿' : '设置岗位后可保存草稿';
      draftLoadedRole = state.role;
-      try { questionContext = JSON.parse(sessionStorage.getItem('practice-context:' + state.role) || 'null'); } catch { questionContext = null; }
-      if (questionContext?.text !== $('#question').value) questionContext = null;
+      questionContext = null;
       if (state.draft?.parent_attempt_id) questionContext={text:$('#question').value,parentId:state.draft.parent_attempt_id};
       else if (questionContext?.parentId) questionContext=null;
       if (state.draft?.question_ref) {
@@ -572,9 +615,6 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
 
  function setQuestionContext(context) {
    questionContext=context;
-   if (state.role) {
-     try { if(context) sessionStorage.setItem('practice-context:' + state.role, JSON.stringify(context)); else sessionStorage.removeItem('practice-context:' + state.role); } catch {}
-   }
    renderQuestionContext();
  }
 
@@ -722,7 +762,7 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
  window.addEventListener('pagehide', () => {
    if (!state.role) return;
    clearTimeout(draftTimer);
-    fetch('/api/draft', {method:'PUT', headers:{'content-type':'application/json'}, body:JSON.stringify({role:state.role,question:$('#question').value,answer:$('#answer').value,parent_attempt_id:questionContext?.parentId || '',question_ref:questionContext?.questionRef || null}), keepalive:true}).catch(() => {});
+    fetchLocal('/api/draft', {method:'PUT', headers:{'content-type':'application/json'}, body:JSON.stringify({role:state.role,question:$('#question').value,answer:$('#answer').value,parent_attempt_id:questionContext?.parentId || '',question_ref:questionContext?.questionRef || null}), keepalive:true}).catch(() => {});
  });
 
  $('#jd-form').addEventListener('submit', async e => {
@@ -1204,7 +1244,7 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
      clearPracticeHelp(); clearRecommendationChoice(); resetDialogue();
      $('#question').value = result.question; $('#answer').value = ''; $('#answer-char-count').textContent = '0 字';
      dialogue.role = role; dialogue.origin = 'ai'; dialogue.generation = {question:result.question, token:result.generation_token};
-     try { sessionStorage.setItem('practice-generated:' + role, JSON.stringify(dialogue.generation)); } catch {}
+     rememberGeneration(dialogue.generation);
      setQuestionContext({text:result.question,origin:'ai'}); scheduleDraft(); renderDialogue(); $('#answer').focus();
    } catch (err) { if (state.role === role && roleRevision === revision && dialogueRevision === sessionRevision) dialogueStatus('AI 题生成失败：' + err.message, 'error'); }
    finally { button.disabled = false; if (dialogueRevision === sessionRevision && state.role === role) { dialogueBusy = false; renderDialogue(); } }
@@ -1469,6 +1509,31 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
  $('#search-target-pill')?.addEventListener('click', () => switchTab('role'));
 
  // AI Review submission
+ async function practiceFingerprint(text) {
+   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+   return [...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('');
+ }
+
+ function rememberGeneration(generation) {
+   practiceFingerprint(generation.question).then(signature=>{
+     if (dialogue.generation===generation) storePractice('generated',{signature,token:generation.token});
+   }).catch(()=>{});
+ }
+
+ function storePractice(kind, value) {
+   if (!state.practiceScope) return;
+   const key = `offerpilot-practice:${state.practiceScope}:${kind}`;
+   try {
+     if (value) sessionStorage.setItem(key,JSON.stringify(value));
+     else sessionStorage.removeItem(key);
+   } catch {}
+ }
+
+ function readPractice(kind) {
+   if (!state.practiceScope) return null;
+   try { return JSON.parse(sessionStorage.getItem(`offerpilot-practice:${state.practiceScope}:${kind}`)); }
+   catch { return null; }
+ }
  // One question at a time: each saved turn remains visible in the conversation.
  function maybeAutoSelectPractice() {
    if (!$('#pane-practice')?.classList.contains('active') || !state.role || $('#question').value || dialogueBusy || practiceAutopickRole === state.role) return;
@@ -1483,12 +1548,9 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
  }
 
  function resetDialogue(forget=true) {
-   const oldRole = dialogue.role || state.role;
    dialogueRevision++; dialogueBusy = false; dialogueRequest = null;
    dialogue = {role:'', turns:[], summary:'', origin:'', generation:null};
-   if (forget && oldRole) {
-     try { sessionStorage.removeItem('practice-dialogue:' + oldRole); sessionStorage.removeItem('practice-generated:' + oldRole); sessionStorage.removeItem('practice-request:' + oldRole); } catch {}
-   }
+   if (forget) for (const kind of ['dialogue','generated','request']) storePractice(kind,null);
    if ($('#question')) $('#question').readOnly = false;
    if ($('#answer')) $('#answer').readOnly = false;
    dialogueStatus(''); renderDialogue();
@@ -1537,19 +1599,19 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
    if (!role) return;
    const revision = dialogueRevision;
    dialogue.role = role;
-   let saved = null, generated = null;
-   try {
-     saved = JSON.parse(sessionStorage.getItem('practice-dialogue:' + role) || 'null');
-     generated = JSON.parse(sessionStorage.getItem('practice-generated:' + role) || 'null');
-     dialogueRequest = JSON.parse(sessionStorage.getItem('practice-request:' + role) || 'null');
-   } catch {}
-   if (generated?.question === $('#question').value && !draft?.parent_attempt_id) {
-     dialogue.generation = generated; dialogue.origin = 'ai';
-     setQuestionContext({text:generated.question,origin:'ai'});
+   const saved = readPractice('dialogue'), generated = readPractice('generated');
+   dialogueRequest = readPractice('request');
+   const currentQuestion = $('#question').value, currentAnswer = $('#answer').value;
+   if (generated && currentQuestion && !draft?.parent_attempt_id) {
+     const signature = await practiceFingerprint(currentQuestion);
+     if (dialogueRevision !== revision || state.role !== role || $('#question').value !== currentQuestion) return;
+     if (generated.signature === signature) {
+       dialogue.generation = {question:currentQuestion,token:generated.token}; dialogue.origin = 'ai';
+       setQuestionContext({text:currentQuestion,origin:'ai'});
+     }
    }
    const id = saved?.id || draft?.parent_attempt_id;
    if (!id) { renderDialogue(); return; }
-   const currentQuestion = $('#question').value, currentAnswer = $('#answer').value;
    try {
      const result = await api('/api/practice/dialogue/' + encodeURIComponent(id) + '?role=' + encodeURIComponent(role));
      if (dialogueRevision !== revision || state.role !== role || $('#question').value !== currentQuestion || $('#answer').value !== currentAnswer) return;
@@ -1584,7 +1646,7 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
        clearPracticeHelp(); clearRecommendationChoice(); resetDialogue();
        $('#question').value=result.question; $('#answer').value=''; $('#answer-char-count').textContent='0 字';
        dialogue.role=role; dialogue.origin='ai'; dialogue.generation={question:result.question,token:result.generation_token};
-       try { sessionStorage.setItem('practice-generated:' + role, JSON.stringify(dialogue.generation)); } catch {}
+       rememberGeneration(dialogue.generation);
        setQuestionContext({text:result.question,origin:'ai'}); scheduleDraft(); renderDialogue();
        dialogueStatus('已生成 AI 补练题；它不是原帖中的题目。'); $('#question').focus();
      } catch(err) { if (state.role===role && dialogueRevision===revision) dialogueStatus('补练题生成失败，原对话和草稿仍保留：' + err.message,'error'); }
@@ -1618,13 +1680,14 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
    if (question.length > 2000 || answer.length > 10000) { dialogueStatus('问题最多 2000 字，回答最多 10000 字；请缩短后再提交。','error'); return; }
    if (dialogue.summary || dialogue.turns.length >= 8) { dialogueStatus('本题已结束，请选择新题。','error'); return; }
    const payload = {role,question,answer,parent_attempt_id:questionContext?.parentId || '',question_ref:questionContext?.questionRef || null,generation_token:dialogue.generation?.question === question ? dialogue.generation.token : ''};
-   const signature = JSON.stringify(payload);
-   if (!dialogueRequest || dialogueRequest.signature !== signature) dialogueRequest = {signature,id:crypto.randomUUID()};
-   payload.request_id = dialogueRequest.id;
-   try { sessionStorage.setItem('practice-request:' + role, JSON.stringify(dialogueRequest)); } catch {}
    const revision = dialogueRevision, roleAtSubmit = roleRevision;
    dialogueBusy = true; renderDialogue(); dialogueStatus('正在围绕你的回答生成点评和追问…','info');
    try {
+     const signature = await practiceFingerprint(JSON.stringify(payload));
+     if (dialogueRevision !== revision || roleRevision !== roleAtSubmit || state.role !== role) return;
+     if (!dialogueRequest || dialogueRequest.signature !== signature) dialogueRequest = {signature,id:crypto.randomUUID()};
+     payload.request_id = dialogueRequest.id;
+     storePractice('request',dialogueRequest);
      await writeDraft();
      if (dialogueRevision !== revision || roleRevision !== roleAtSubmit || state.role !== role) return;
      const result = await api('/api/practice/dialogue/turn','POST',payload);
@@ -1633,7 +1696,7 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
      dialogue.turns.push({id:result.id,question,answer,feedback:result.feedback,follow_up:result.follow_up || '',coaching:result.coaching || null});
      if (typeof agents !== 'undefined') agents.answered(questionContext?.questionRef,dialogue.turns[0].id);
      dialogue.generation = null; dialogueRequest = null;
-     try { sessionStorage.removeItem('practice-generated:' + role); sessionStorage.removeItem('practice-request:' + role); sessionStorage.setItem('practice-dialogue:' + role, JSON.stringify({id:result.id})); } catch {}
+     storePractice('generated',null); storePractice('request',null); storePractice('dialogue',{id:result.id});
      const canFollow = result.follow_up && dialogue.turns.length < 8;
      if (canFollow) { const sourceQuestionId=questionContext?.sourceQuestionId || (questionContext?.questionRef?.kind==='source' ? questionContext.questionRef.id : ''); $('#question').value = result.follow_up; setQuestionContext({text:result.follow_up,parentId:result.id,sourceQuestionId}); }
      $('#answer').value = ''; $('#answer-char-count').textContent = '0 字';
@@ -1735,4 +1798,10 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
    switchTab('dashboard');
  }
 
-refresh().catch(e => toast.error('加载失败：' + e.message));
+refresh().catch(e => {
+  if (e.status === 401) {
+    try { sessionStorage.removeItem('offerpilot-access'); } catch {}
+    $('.app-window').hidden = true;
+    $('#local-access-required').hidden = false;
+  } else toast.error('加载失败：' + e.message);
+});

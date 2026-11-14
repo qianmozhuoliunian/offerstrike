@@ -19,7 +19,7 @@ async function readConfig(){
 }
 function launchBackend(token) {
   const env={...process.env};
-  for(const key of [...keys,'RESEARCH_SERVICE_URL','RESEARCH_COST_BUDGET','RESEARCH_LOG','NODE_OPTIONS']) delete env[key];
+  for(const key of [...keys,'RESEARCH_SERVICE_URL','RESEARCH_SERVICE_TOKEN','RESEARCH_COST_BUDGET','RESEARCH_LOG','NODE_OPTIONS']) delete env[key];
   Object.assign(env,config,{INTERVIEW_DATA_DIR:home(),INTERVIEW_DESKTOP_TOKEN:token});
   const worker=utilityProcess.fork(path.join(__dirname,'..','server.js'),[],{env,stdio:'ignore'});
   child=worker;
@@ -62,12 +62,7 @@ ipcMain.handle('services:save',async(event,values)=>{
       if(typeof value!=='string' || value.length>2048 || /[\x00-\x1f]/.test(value)) throw Error('设置格式无效');
       if(value.trim()) next[key]=value.trim(); else delete next[key];
     }
-    if(next.AI_BASE_URL) {
-      let base;
-      try {base=new URL(next.AI_BASE_URL);} catch {throw Error('AI 服务地址无效');}
-      if((base.protocol!=='https:' && !(base.protocol==='http:' && ['localhost','127.0.0.1','[::1]'].includes(base.hostname))) ||
-          base.username || base.password || base.search || base.hash) throw Error('AI 服务地址须使用 HTTPS 或本机 HTTP');
-    }
+    if(next.AI_BASE_URL) next.AI_BASE_URL=(await import('../src/ai-transport.js')).validateAiBase(next.AI_BASE_URL);
     const file=configFile();
     await writeFile(file+'.tmp',await safeStorage.encryptStringAsync(JSON.stringify(next)));
     await rename(file+'.tmp',file);
@@ -103,7 +98,11 @@ async function start() {
   window.webContents.on('will-navigate',(event,url)=>{if(new URL(url).origin!==address) event.preventDefault();});
   window.webContents.on('will-redirect',(event,url)=>{if(new URL(url).origin!==address) event.preventDefault();});
   window.webContents.setWindowOpenHandler(({url})=>{
-    try {const parsed=new URL(url);if(['https:','http:'].includes(parsed.protocol) && parsed.origin!==address) void shell.openExternal(url).catch(()=>{});} catch {}
+    try {
+      const parsed=new URL(url);
+      if (['https:','http:'].includes(parsed.protocol) && !parsed.username && !parsed.password &&
+          !['localhost','127.0.0.1','[::1]'].includes(parsed.hostname)) void shell.openExternal(parsed.href).catch(()=>{});
+    } catch {}
     return {action:'deny'};
   });
   let closeReady=false;

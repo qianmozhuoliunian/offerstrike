@@ -9,9 +9,9 @@ npm ci
 npm run demo:preview
 ```
 
-打开 `http://127.0.0.1:8090`，按「核对原帖 → 练习和自评 → 看推荐」体验。选择「需要再练」与「比较熟悉」会得到不同推荐；点评明确标注为预置示例。
+打开 `http://127.0.0.1:8090`，按「核对原帖 → 练习和自评 → 看推荐」体验。选择「需要再练」与「比较熟悉」会得到不同推荐。请使用虚构回答，点评是预置示例。
 
-运行 `npm run demo:build` 后，只将 `dist/demo/` 交给静态托管。无需配置 API、数据库或密钥。若要在网页提供下载，先将 `OfferPilot-Setup.exe` 放入 `dist/demo/desktop/`，再执行 `npm run demo:build -- --desktop-download`。未启用下载时，页面不会显示下载链接。不要把项目根目录或本机 Node 工作台部署到公网。
+运行 `npm run demo:build` 后，将 `dist/demo/` 用作静态托管根目录。每次构建都会替换旧的演示目录，只输出网页、脚本、插图和响应头配置。支持 `_headers` 的托管平台会读取生成的配置。其他平台可将同样的值设置为 HTTP 响应头，以阻止页面被嵌入和向外发送输入。若要在网页提供 Windows 下载，先运行 `npm run desktop:build`，再执行 `npm run demo:build -- --desktop-download`，由构建脚本复制安装包。
 
 ## Windows 桌面试用
 
@@ -21,6 +21,8 @@ npm run demo:preview
 - `OfferPilot-0.1.0-win.zip`：便携程序，先解压整个目录，再双击 `OfferPilot.exe`。
 
 两种方式都自带运行时。当前为未签名的 Windows x64 测试版，不提供自动更新。资料位于 `%APPDATA%\OfferPilot\workbench\interview.sqlite`，安装路径和项目源码目录均不保存这份数据。
+
+清空桌面版时，退出应用后删除该数据目录下的 `interview.sqlite` 及同名 SQLite 辅助文件。`services.enc` 是加密的服务配置，删除它会移除本机配置。另行导出的 JSON 需要到保存位置删除。
 
 首次使用可先在原工作台导出 JSON，再到桌面版「偏好与状态 → 导入备份」。导入只做合并，原数据库仍在原处。原岗位导入后如显示待核对，按现有流程确认后即可搜索。桌面应用关闭时会先尝试保存当前草稿，再退出本机后端；异常断电或强制结束进程仍可能丢失尚未保存的输入。
 

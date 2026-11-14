@@ -1,3 +1,4 @@
+import { workbenchClient } from './fixtures/local-workbench.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -17,28 +18,30 @@ test('search API separates unverified results and preserves source and date filt
   const port = allocate.address().port;
   await new Promise(resolve => allocate.close(resolve));
   const child = spawn(process.execPath, ['--import', fixture, server], {
-    cwd:temp, env:{...process.env, PORT:String(port), TAVILY_API_KEY:'test-key', AI_API_KEY:'', AI_MODEL:''}, stdio:['ignore','pipe','pipe']
+    cwd:temp, env:{...process.env,INTERVIEW_DATA_DIR:join(temp,'data'),PORT:String(port), TAVILY_API_KEY:'test-key', AI_API_KEY:'', AI_MODEL:''}, stdio:['ignore','pipe','pipe']
   });
   let stderr=''; child.stderr.on('data', chunk => { stderr += chunk; });
+  let output=''; child.stdout.on('data',chunk=>output+=chunk);
   try {
     let info;
     const deadline = Date.now() + 10000;
-    while (!info) {
+    while(!info || !output.includes('#access=')) {
       if (child.exitCode !== null) throw Error(`server exited: ${stderr}`);
       if (Date.now() > deadline) throw Error(`server did not start: ${stderr}`);
       try { info = JSON.parse(await readFile(join(temp,'data','server.json'),'utf8')); }
       catch { await new Promise(resolve => setTimeout(resolve, 30)); }
     }
+    const fetchWorkbench=workbenchClient(output);
     const search = async payload => {
-      const response = await fetch(info.url + '/api/search', {
+      const response = await fetchWorkbench(info.url + '/api/search', {
         method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(payload)
       });
       assert.equal(response.status,200);
       return response.json();
     };
-    const pending=await (await fetch(info.url+'/api/role',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({role:'产品经理'})})).json();
+    const pending=await (await fetchWorkbench(info.url+'/api/role',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({role:'产品经理'})})).json();
     assert.equal(pending.status,'needs_confirmation');
-    const saved=await fetch(info.url+'/api/role',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({role:'产品经理',confirmation_token:pending.confirmation_token})});
+    const saved=await fetchWorkbench(info.url+'/api/role',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({role:'产品经理',confirmation_token:pending.confirmation_token})});
     assert.equal(saved.status,200);
 
     const current = await search({role:'产品经理',source:'all',range:'year'});
@@ -52,7 +55,7 @@ test('search API separates unverified results and preserves source and date filt
     assert.equal(nowcoder.results.length,3);
 
     const requirements='范围验证'+'要'.repeat(795)+'😀'+'不应发送';
-    const saveProfile=await fetch(info.url+'/api/jd',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({role:'产品经理',jd:'岗位描述',confirmed_requirements:requirements})});
+    const saveProfile=await fetchWorkbench(info.url+'/api/jd',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({role:'产品经理',jd:'岗位描述',confirmed_requirements:requirements})});
     assert.equal(saveProfile.status,200);
     const captured=await search({role:'产品经理',company:'示例公司',source:'nowcoder',range:'all'});
     assert.equal(captured.results.length,0);
@@ -68,7 +71,7 @@ test('search API separates unverified results and preserves source and date filt
     assert.equal(withoutAi.results.length,0);
     assert.ok(withoutAi.unverified_results.every(item=>item.ai_relevance==='uncertain'));
     assert.match(withoutAi.notice,/未配置/);
-    const longCompany=await fetch(info.url+'/api/search',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({role:'产品经理',company:'公'.repeat(101),range:'all'})});
+    const longCompany=await fetchWorkbench(info.url+'/api/search',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({role:'产品经理',company:'公'.repeat(101),range:'all'})});
     assert.equal(longCompany.status,400);
   } finally {
     if (child.exitCode === null) { child.kill(); await once(child,'exit').catch(()=>{}); }
@@ -84,16 +87,18 @@ test('AI search sends only public snippets, validates evidence and degrades fail
   await new Promise(resolve=>allocate.listen(0,'127.0.0.1',resolve));
   const port=allocate.address().port;
   await new Promise(resolve=>allocate.close(resolve));
-  const child=spawn(process.execPath,['--import',fixture,server],{cwd:temp,env:{...process.env,PORT:String(port),TAVILY_API_KEY:'test-key',AI_API_KEY:'fake',AI_MODEL:'mock',AI_BASE_URL:'https://mock-search-ai.test/v1'},stdio:['ignore','pipe','pipe']});
+  const child=spawn(process.execPath,['--import',fixture,server],{cwd:temp,env:{...process.env,INTERVIEW_DATA_DIR:join(temp,'data'),PORT:String(port),TAVILY_API_KEY:'test-key',AI_API_KEY:'fake',AI_MODEL:'mock',AI_BASE_URL:'https://mock-search-ai.test/v1'},stdio:['ignore','pipe','pipe']});
   let stderr=''; child.stderr.on('data',chunk=>{stderr+=chunk;});
+  let output=''; child.stdout.on('data',chunk=>output+=chunk);
   try {
     let info; const deadline=Date.now()+10000;
-    while(!info) {
+    while(!info || !output.includes('#access=')) {
       if(child.exitCode!==null || Date.now()>deadline) throw Error(stderr || 'server did not start');
       try { info=JSON.parse(await readFile(join(temp,'data','server.json'),'utf8')); }
       catch { await new Promise(resolve=>setTimeout(resolve,30)); }
     }
-    const post=(path,data)=>fetch(info.url+path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
+    const fetchWorkbench=workbenchClient(output);
+    const post=(path,data)=>fetchWorkbench(info.url+path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
     assert.equal((await post('/api/role',{role:'产品经理'})).status,200);
     assert.equal((await post('/api/jd',{role:'产品经理',jd:'私人岗位描述',confirmed_requirements:'私人岗位要求'})).status,200);
     const response=await post('/api/search',{role:'产品经理',source:'all',range:'year',ai_relevance:true});

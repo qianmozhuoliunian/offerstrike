@@ -1,3 +1,4 @@
+import { workbenchClient } from './fixtures/local-workbench.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -35,7 +36,7 @@ test('HTTP workflow validates JD output, isolates roles, imports safely and reje
   await new Promise(resolve=>mock.listen(0,'127.0.0.1',resolve));
   const allocate=http.createServer();await new Promise(resolve=>allocate.listen(0,'127.0.0.1',resolve));
   const port=allocate.address().port;await new Promise(resolve=>allocate.close(resolve));
-  const env={...process.env,PORT:String(port),AI_API_KEY:'fake-test-key',AI_MODEL:'test',AI_BASE_URL:`http://127.0.0.1:${mock.address().port}`};
+  const env={...process.env,INTERVIEW_DATA_DIR:join(temp,'data'),PORT:String(port),AI_API_KEY:'fake-test-key',AI_MODEL:'test',AI_BASE_URL:`http://127.0.0.1:${mock.address().port}`};
   delete env.TAVILY_API_KEY;
   const child=spawn(process.execPath,[fileURLToPath(new URL('../server.js',import.meta.url))],{cwd:temp,env,stdio:['ignore','pipe','pipe']});
   let stdout='', stderr=''; child.stdout.on('data',c=>stdout+=c); child.stderr.on('data',c=>stderr+=c);
@@ -46,20 +47,28 @@ test('HTTP workflow validates JD output, isolates roles, imports safely and reje
       if(Date.now()>deadline) throw Error(`server did not start: ${stderr}`);
       await new Promise(resolve=>setTimeout(resolve,30));
     }
+    const fetchWorkbench=workbenchClient(stdout);
     const base=`http://127.0.0.1:${port}`;
+    assert.equal((await fetch(base+'/api/state')).status,401);
+    assert.equal((await fetch(base+'/api/export',{headers:{'x-offerpilot-access':'invalid'}})).status,401);
+    assert.equal((await fetch(base+'/api/draft',{method:'PUT',headers:{'content-type':'application/json'},body:'{}'})).status,401);
+    for (const path of ['/.env','/data/interview.sqlite','/.git/config','/server.js']) assert.equal((await fetchWorkbench(base+path)).status,404);
     // The process runs from a temporary data directory; assets must still resolve
     // from the application directory, including modules imported by the page.
     for (const [path, contentType] of [['/', 'text/html'], ['/app.js', 'text/javascript'], ['/ui/toast.js', 'text/javascript'], ['/ui/source-extraction.js', 'text/javascript'], ['/style.css', 'text/css']]) {
-      const asset = await fetch(base + path);
+      const asset = await fetchWorkbench(base + path);
       assert.equal(asset.status, 200, path);
       assert.match(asset.headers.get('content-type'), new RegExp(contentType), path);
+      assert.equal(asset.headers.get('cache-control'),'no-store');
+      assert.equal(asset.headers.get('referrer-policy'),'no-referrer');
+      assert.match(asset.headers.get('content-security-policy'),/frame-ancestors 'none'/);
     }
-    const post=(path,data,extra={})=>fetch(base+path,{method:'POST',headers:{'content-type':'application/json',...extra},body:JSON.stringify(data)});
+    const post=(path,data,extra={})=>fetchWorkbench(base+path,{method:'POST',headers:{'content-type':'application/json',...extra},body:JSON.stringify(data)});
     const denied=await post('/api/role',{role:'恶意修改'},{origin:'https://evil.example'});
     assert.equal(denied.status,403);
-    const wrongType=await fetch(base+'/api/role',{method:'POST',headers:{'content-type':'text/plain'},body:'{"role":"恶意修改"}'});
+    const wrongType=await fetchWorkbench(base+'/api/role',{method:'POST',headers:{'content-type':'text/plain'},body:'{"role":"恶意修改"}'});
     assert.equal(wrongType.status,403);
-    assert.equal((await (await fetch(base+'/api/state')).json()).role,'');
+    assert.equal((await (await fetchWorkbench(base+'/api/state')).json()).role,'');
     assert.equal((await post('/api/role',{role:'产品经理'})).status,200);
     const valid=await post('/api/jd/parse',{jd:'岗位职责：负责数据分析'});
     assert.equal((await valid.json()).requirements,'• 负责数据分析');
@@ -70,11 +79,11 @@ test('HTTP workflow validates JD output, isolates roles, imports safely and reje
     assert.match((await tooLongTitle.json()).error,/标题不能超过 1000/);
     const source=await (await post('/api/sources',{title:'测试来源',url:'https://example.com',role:'产品经理',question:'如何做数据分析？'})).json();
     assert.ok(source.id);
-    const sourceQuestion=(await (await fetch(base+'/api/state')).json()).sources.find(s=>s.id===source.id).questions[0];
+    const sourceQuestion=(await (await fetchWorkbench(base+'/api/state')).json()).sources.find(s=>s.id===source.id).questions[0];
     const question_ref={kind:'source',id:sourceQuestion.id};
     const requirements='要求'.repeat(1600)+'要求末尾';
     assert.equal((await post('/api/jd',{role:'产品经理',jd:'岗位描述',confirmed_requirements:requirements})).status,200);
-    const attemptsBeforeHelp=(await (await fetch(base+'/api/state')).json()).attempts.length;
+    const attemptsBeforeHelp=(await (await fetchWorkbench(base+'/api/state')).json()).attempts.length;
     for (const mode of ['hint','breakdown','approach']) {
       const help=await post('/api/practice/help',{role:'产品经理',question:'如何评估产品？',mode,answer:'不应发送的回答'});
       assert.equal(help.status,200);
@@ -84,7 +93,7 @@ test('HTTP workflow validates JD output, isolates roles, imports safely and reje
       assert.ok(request.messages.at(-1).content.includes(requirements));
       assert.doesNotMatch(JSON.stringify(request),/不应发送的回答/);
     }
-    assert.equal((await (await fetch(base+'/api/state')).json()).attempts.length,attemptsBeforeHelp);
+    assert.equal((await (await fetchWorkbench(base+'/api/state')).json()).attempts.length,attemptsBeforeHelp);
     const beforeInvalidHelp=modelRequests.length;
     assert.equal((await post('/api/practice/help',{role:'产品经理',question:'题目',mode:'invalid'})).status,400);
     assert.equal((await post('/api/practice/help',{role:'产品经理',question:'题'.repeat(2001),mode:'hint'})).status,400);
@@ -92,7 +101,7 @@ test('HTTP workflow validates JD output, isolates roles, imports safely and reje
     const malformedHelp=await post('/api/practice/help',{role:'产品经理',question:'__bad_help__',mode:'hint'});
     assert.equal(malformedHelp.status,400);
     assert.match((await malformedHelp.json()).error,/AI 帮助格式无效/);
-    assert.equal((await (await fetch(base+'/api/state')).json()).attempts.length,attemptsBeforeHelp);
+    assert.equal((await (await fetchWorkbench(base+'/api/state')).json()).attempts.length,attemptsBeforeHelp);
     const maxQuestion='问'.repeat(1999)+'尾', maxAnswer='答'.repeat(9999)+'尾';
     const fullReview=await post('/api/review',{role:'产品经理',question:maxQuestion,answer:maxAnswer});
     assert.equal(fullReview.status,200);
@@ -111,14 +120,14 @@ test('HTTP workflow validates JD output, isolates roles, imports safely and reje
     const review=await (await post('/api/review',{role:'产品经理',question:'如何做数据分析？',answer:'先确定业务目标',question_ref})).json();
     assert.equal(review.feedback,'已记录点评和追问');
     assert.equal(review.follow_up,'具体如何选指标？');
-    const linkedDraft=await fetch(base+'/api/draft',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({role:'产品经理',question:'如何做数据分析？',answer:'草稿',question_ref})});
+    const linkedDraft=await fetchWorkbench(base+'/api/draft',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({role:'产品经理',question:'如何做数据分析？',answer:'草稿',question_ref})});
     assert.equal(linkedDraft.status,200);
-    assert.deepEqual((await (await fetch(base+'/api/state')).json()).draft.question_ref,question_ref);
+    assert.deepEqual((await (await fetchWorkbench(base+'/api/state')).json()).draft.question_ref,question_ref);
     assert.equal((await post('/api/review',{role:'其他岗位',question:'如何做数据分析？',answer:'回答',question_ref})).status,400);
     assert.equal((await post('/api/review',{role:'产品经理',question:'手工修改',answer:'回答',question_ref})).status,400);
-    const saveFollowupDraft=await fetch(base+'/api/draft',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({role:'产品经理',question:review.follow_up,answer:'草稿',parent_attempt_id:review.id})});
+    const saveFollowupDraft=await fetchWorkbench(base+'/api/draft',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({role:'产品经理',question:review.follow_up,answer:'草稿',parent_attempt_id:review.id})});
     assert.equal(saveFollowupDraft.status,200);
-    assert.equal((await (await fetch(base+'/api/state')).json()).draft.parent_attempt_id,review.id);
+    assert.equal((await (await fetchWorkbench(base+'/api/state')).json()).draft.parent_attempt_id,review.id);
     const followup=await post('/api/review',{role:'产品经理',question:review.follow_up,answer:'结合业务目标',parent_attempt_id:review.id});
     assert.equal(followup.status,200);
     assert.equal((await post('/api/review',{role:'其他岗位',question:review.follow_up,answer:'回答',parent_attempt_id:review.id})).status,400);
@@ -130,15 +139,15 @@ test('HTTP workflow validates JD output, isolates roles, imports safely and reje
       assert.equal(actual.feedback,fixture.mock_response.feedback,fixture.id);
       assert.equal(actual.follow_up,fixture.mock_response.follow_up,fixture.id);
     }
-    const beforeInvalid=(await (await fetch(base+'/api/state')).json()).attempts.length;
+    const beforeInvalid=(await (await fetchWorkbench(base+'/api/state')).json()).attempts.length;
     const badReview=await post('/api/review',{role:'产品经理',question:'测试问题',answer:'__malformed_model_response__'});
     assert.equal(badReview.status,400);
-    assert.equal((await (await fetch(base+'/api/state')).json()).attempts.length,beforeInvalid);
-    const assessment=await fetch(base+`/api/attempts/${review.id}/assessment`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({rating:'revisit'})});
+    assert.equal((await (await fetchWorkbench(base+'/api/state')).json()).attempts.length,beforeInvalid);
+    const assessment=await fetchWorkbench(base+`/api/attempts/${review.id}/assessment`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({rating:'revisit'})});
     assert.equal(assessment.status,200);
     const recommendation=await (await post('/api/recommendation',{role:'产品经理'})).json();
     assert.equal(recommendation.question.reason,'你标记为需要再练');
-    const backup=await (await fetch(base+'/api/export')).json();
+    const backup=await (await fetchWorkbench(base+'/api/export')).json();
     assert.equal((await post('/api/import',{mode:'preview',data:backup})).status,200);
     backup.attempts.push({id:'legacy-long',question:'问'.repeat(2001),answer:'回答',feedback:'旧点评',role:'产品经理',created:'2026-01-01'});
     backup.attempt_details.push({attempt_id:'legacy-long',follow_up:'继续？',parent_attempt_id:''});
@@ -150,7 +159,7 @@ test('HTTP workflow validates JD output, isolates roles, imports safely and reje
     assert.match((await legacyFollowUp.json()).error,/上一轮问题或回答超过/);
     assert.equal(modelRequests.length,beforeLegacyFollowUp);
     assert.equal((await post('/api/import',{mode:'merge',data:{version:99}})).status,400);
-    assert.equal((await (await fetch(base+'/api/state')).json()).role,'产品经理');
+    assert.equal((await (await fetchWorkbench(base+'/api/state')).json()).role,'产品经理');
   } finally {
     if(child.exitCode===null) { child.kill(); await once(child,'exit').catch(()=>{}); }
     await new Promise(resolve=>mock.close(resolve));

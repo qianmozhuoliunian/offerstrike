@@ -20,7 +20,7 @@ panel.addEventListener('click',event=>{
   const button=event.target.closest('button');
   if(!button) return;
   if(button.id==='demo-start'){
-    step(1,'<h2>用自己的话回答</h2><p>你了解 Webpack 的 loader 吗？</p><label for="demo-answer">你的练习回答（可选）</label><textarea id="demo-answer" maxlength="1000" placeholder="例如：先解释它的作用，再举一个场景。"></textarea><button id="demo-review" type="button">查看示例点评 →</button>');
+    step(1,'<h2>用自己的话回答</h2><p>你了解 Webpack 的 loader 吗？</p><label for="demo-answer">你的练习回答（可选）</label><textarea id="demo-answer" maxlength="1000" autocomplete="off" spellcheck="false" placeholder="例如：先解释它的作用，再举一个场景。"></textarea><button id="demo-review" type="button">查看示例点评 →</button>');
   } else if(button.id==='demo-review'){
     step(1,assessment);
   } else if(button.dataset.rating){
@@ -32,4 +32,8 @@ panel.addEventListener('click',event=>{
   } else if(button.id==='demo-change'){
     step(1,assessment);
   } else if(button.id==='demo-reset') step(0,initial);
+});
+window.addEventListener('pagehide',()=>{
+  const answer=document.querySelector('#demo-answer');
+  if (answer) answer.value='';
 });

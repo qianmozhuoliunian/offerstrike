@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import vm from 'node:vm';
 
 // Exercise the actual event handlers with controlled network responses.
@@ -16,10 +17,10 @@ function harness({draft} = {}) {
   const api = (path,method,data) => new Promise((resolve,reject)=>calls.push({path,method,data,resolve,reject}));
   let count=0;
   const ctx=vm.createContext({
-    state:{role:'产品经理'}, questionContext:{text:'如何做需求分析？',questionRef:{kind:'source',id:'q1'}}, roleRevision:0,
+    state:{role:'产品经理',practiceScope:'opaque-scope'}, questionContext:{text:'如何做需求分析？',questionRef:{kind:'source',id:'q1'}}, roleRevision:0,
     dialogue:{role:'',turns:[],summary:'',origin:'',generation:null}, dialogueRevision:0, dialogueBusy:false, dialogueRequest:null, practiceAutopickRole:null,
     $:s=>elements[s], api, escapeHtml:s=>String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),
-    crypto:{randomUUID:()=>`request-${++count}`}, sessionStorage:{getItem:k=>storage.get(k) || null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
+    TextEncoder, crypto:{subtle:{digest:(_algorithm,input)=>createHash('sha256').update(input).digest()},randomUUID:()=>`request-${++count}`}, sessionStorage:{getItem:k=>storage.get(k) || null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
     writeDraft:draft || (async()=>{}), refresh:async()=>{}, setQuestionContext:c=>{ctx.questionContext=c;}, window:{confirm:()=>true},
     clearPracticeHelp:()=>{}, clearRecommendationChoice:()=>{}, scheduleDraft:()=>{},
   });
@@ -55,6 +56,10 @@ test('a sourced question stays in one conversation through a follow-up and summa
 test('failed sends preserve the answer and retry with the same idempotency key', async () => {
   const h=harness(); const first=submit(h); await tick();
   const requestId=h.calls[0].data.request_id;
+  const persisted=JSON.parse(h.storage.get('offerpilot-practice:opaque-scope:request'));
+  assert.equal(persisted.id,requestId);
+  assert.match(persisted.signature,/^[a-f0-9]{64}$/);
+  assert.doesNotMatch(JSON.stringify([...h.storage]),/先了解用户问题|如何做需求分析|产品经理/);
   h.calls[0].reject(Error('服务暂不可用')); await first;
   assert.equal(h.elements['#answer'].value,'先了解用户问题');
   assert.match(h.elements['#review-status'].textContent,/回答仍保留/);
@@ -66,6 +71,7 @@ test('failed sends preserve the answer and retry with the same idempotency key',
 test('a role change while saving the draft prevents sending the old answer to AI', async () => {
   let finishDraft; const h=harness({draft:()=>new Promise(resolve=>{finishDraft=resolve;})});
   const pending=submit(h);
+  await tick();
   h.ctx.state.role='其他岗位'; h.ctx.roleRevision++;
   finishDraft(); await pending;
   assert.equal(h.calls.length,0);
@@ -112,5 +118,5 @@ test('a late drill cannot overwrite the draft after changing roles', async () =>
   h.ctx.state.role='前端开发';h.ctx.roleRevision++;
   h.calls[0].resolve({question:'旧岗位补练',generation_token:'old'});await pending;
   assert.notEqual(h.elements['#question'].value,'旧岗位补练');
-  assert.equal(h.storage.has('practice-generated:前端开发'),false);
+  assert.equal(h.storage.has('offerpilot-practice:opaque-scope:generated'),false);
 });

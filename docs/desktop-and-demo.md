@@ -1,29 +1,29 @@
 # 桌面版与公开体验页
 
-网页版用于演示，Windows 应用是日常备战的完整入口。两端共用复习推荐规则；公开版只加载固定样例，当前页面的回答与自评不发送也不保存。现有本地网站和 `npm start` 继续可用。
+静态体验页使用固定样例，回答和自评刷新即清空。要保存自己的题库，用 Windows 桌面版或 `npm start` 启动本机工作台。
 
 ## 预览与发布网页
 
 ```powershell
-npm ci
+npm ci --omit=dev
 npm run demo:preview
 ```
 
-打开 `http://127.0.0.1:8090`，按「核对原帖 → 练习和自评 → 看推荐」体验。选择「需要再练」与「比较熟悉」会得到不同推荐。请使用虚构回答，点评是预置示例。
+打开终端给出的地址。请使用虚构回答，点评为预置示例。
 
-运行 `npm run demo:build` 后，将 `dist/demo/` 用作静态托管根目录。每次构建都会替换旧的演示目录，只输出网页、脚本、插图和响应头配置。支持 `_headers` 的托管平台会读取生成的配置。其他平台可将同样的值设置为 HTTP 响应头，以阻止页面被嵌入和向外发送输入。若要在网页提供 Windows 下载，先运行 `npm run desktop:build`，再执行 `npm run demo:build -- --desktop-download`，由构建脚本复制安装包。
+对外发布时，运行 `npm run demo:build`，只托管 `dist/demo/`。平台若不读取 `_headers`，请按该文件设置响应头。想提供 Windows 下载，先构建安装包，再运行 `npm run demo:build -- --desktop-download`。
 
 ## Windows 桌面试用
 
-在 Windows 运行 `npm run desktop:build`，产物位于 `dist/windows/`：
+在 Windows 运行 `npm ci`（含开发依赖），再运行 `npm run desktop:build`。产物位于 `dist/windows/`：
 
 - `OfferStrike-Setup.exe`：当前用户安装程序。
 - `OfferStrike-0.1.0-win.zip`：便携程序，先解压整个目录，再双击 `OfferStrike.exe`。
 
-两种方式都自带运行时。当前为未签名的 Windows x64 测试版，不提供自动更新。资料位于 `%APPDATA%\OfferPilot\workbench\interview.sqlite`，安装路径和项目源码目录均不保存这份数据。更名为 OfferStrike 后仍沿用此旧目录，已有题库和加密服务配置无需迁移。
+两种方式均自带运行时。Windows x64 试用包未签名，无自动更新。桌面版沿用 `%APPDATA%\OfferPilot\workbench\`，更名无需迁移数据。
 
-清空桌面版时，退出应用后删除该数据目录下的 `interview.sqlite` 及同名 SQLite 辅助文件。`services.enc` 是加密的服务配置，删除它会移除本机配置。另行导出的 JSON 需要到保存位置删除。
+从网页工作台迁移时，先导出 JSON，再从桌面版「偏好与状态 → 导入备份」预览并合并。若旧岗位显示待核对，请确认后再搜索。
 
-首次使用可先在原工作台导出 JSON，再到桌面版「偏好与状态 → 导入备份」。导入只做合并，原数据库仍在原处。原岗位导入后如显示待核对，按现有流程确认后即可搜索。桌面应用关闭时会先尝试保存当前草稿，再退出本机后端；异常断电或强制结束进程仍可能丢失尚未保存的输入。
+清空资料时，先退出应用，再删除数据目录里的 `interview.sqlite` 及同名辅助文件，并单独处理已导出的 JSON。`services.enc` 是加密的服务配置，删除后需重新配置。
 
-在桌面版「搜索和 AI 设置」填写各服务密钥、模型和地址，保存后重启。密钥使用当前系统账号的加密存储，不回显、不进备份或打包产物。桌面版快速搜索和深度研究均使用 Node 路径，无需 FastAPI。无网络或无模型密钥时，仍可管理题库、恢复草稿、仅保存作答并自评；主动补点评只发送本次题目和回答。
+可在「搜索和 AI 设置」填写密钥、模型和地址，保存后重启。密钥由系统加密保存，不进入备份。无需配置也能整理题库、作答和自评；各功能发送的数据见[使用指南](usage.md#外部服务配置与数据流向)。

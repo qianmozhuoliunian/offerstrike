@@ -1,7 +1,5 @@
 # 完整使用与配置指南
 
-本项目是面向求职者的本地面试准备工具。可以设置目标岗位、查找并收藏面经来源、手动整理题目、练习并获取 AI 点评，以及单独记录真实面试复盘。搜索结果和 AI 输出需要用户核实，不代表真实经历或标准答案。
-
 ## 运行和测试
 
 需要 Node.js 22.13 或更新版本：
@@ -16,22 +14,11 @@ npm test
 
 可以选择用 FastAPI 执行 Tavily / Exa 检索，页面和 SQLite 仍由 Node 管理。双进程启动和回退方法见 [FastAPI 研究接口](../research_service/README.md)。
 
-另有两个独立入口，构建和发布方式见 [桌面版与公开体验页](desktop-and-demo.md)：
-
-- `npm run demo:preview`：启动两分钟网页体验，仅加载静态样例。发布时只部署 `dist/demo/`。
-- `npm run desktop`：在开发环境启动 Windows 桌面工作台；`npm run desktop:build` 生成安装包和便携包。打包版自带运行时，无需安装 Node 或 Python。
+桌面开发可运行 `npm run desktop`。安装包和静态体验页见[桌面版与公开体验页](desktop-and-demo.md)。
 
 ## 项目结构
 
-- `server.js`：本机 HTTP 入口、接口路由和静态资源加载。
-- `public/`：浏览器页面、样式和页面交互；`public/ui/` 放独立的通用界面行为。
-- `src/core.js`、`src/questions.js`、`src/workspace.js`：基础校验、来源题目和工作台数据操作。
-- `src/recommendation.js`、`src/question-identity.js`：复习推荐及题目和作答的关联。
-- `src/interview-research.js`：多源检索、按条件补搜及结果分组；`src/services.js`、`src/search-relevance.js` 提供查询规则及相关性筛选。
-- `src/request-security.js`：本机请求校验。
-- `src/import-data.js`：备份预览与合并导入；导出入口在 `src/workspace.js`。
-- `tests/`：自动化测试和模拟模型样本；`docs/`：规格、评估与研究记录。
-- `data/`：运行时本地数据与工作文件，不属于源码；`.env` 保存本机服务配置。
+`public/` 是界面，`server.js` 是本机服务入口，`src/` 处理搜索、练习与数据，`desktop/` 和 `demo/` 分别提供桌面应用与静态体验。代码入口与测试说明见[运行架构](runtime-architecture.md)。
 
 ## 使用
 

@@ -2,27 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 // New questions are explicitly entered by the user. The old sources.question
 // field may contain a search snippet, so it remains untouched and unverified.
-export function initializeQuestions(db) {
-  db.exec(`CREATE TABLE IF NOT EXISTS questions (
-    id TEXT PRIMARY KEY,
-    source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
-    text TEXT NOT NULL,
-    created TEXT NOT NULL
-  );`);
-  if (!db.prepare('PRAGMA table_info(questions)').all().some(column => column.name === 'note')) {
-    db.exec("ALTER TABLE questions ADD COLUMN note TEXT NOT NULL DEFAULT ''");
-  }
-  db.exec(`CREATE TABLE IF NOT EXISTS question_topics (
-    kind TEXT NOT NULL, question_id TEXT NOT NULL, topic TEXT NOT NULL,
-    PRIMARY KEY (kind, question_id)
-  );`);
-  db.exec(`CREATE TABLE IF NOT EXISTS question_evidence (
-    question_id TEXT PRIMARY KEY REFERENCES questions(id) ON DELETE CASCADE,
-    evidence TEXT NOT NULL,
-    confirmed_text TEXT NOT NULL,
-    request_id TEXT NOT NULL UNIQUE
-  );`);
-}
+export { initializeQuestions } from './database.js';
 
 function normalizeQuestion(value) {
   const text = String(value || '').trim();

@@ -6,8 +6,8 @@ import vm from 'node:vm';
 // Exercise the browser's actual search handlers using a small fake DOM and
 // controlled requests, without contacting a search service or saving data.
 const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
-const invalidation = app.slice(app.indexOf(' function invalidateSearchForRoleChange()'), app.indexOf('\n function writeDraft()'));
-const searchHandlers = app.slice(app.indexOf(' // Search form submission'), app.indexOf(' // AI Review submission'));
+const invalidation = app.slice(app.indexOf(' function invalidateSearchForRoleChange()'), app.indexOf('\n function openPracticeSource('));
+const searchHandlers = app.slice(app.indexOf(' // Search form submission'), app.indexOf(' mountDesktopSettings('));
 
 function harness() {
   const handlers = {}, calls = [], messages = [], opened = [];

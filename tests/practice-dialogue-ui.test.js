@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import vm from 'node:vm';
 
 // Exercise the actual event handlers with controlled network responses.
-const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+const app = await readFile(new URL('../public/ui/practice.js', import.meta.url), 'utf8');
 const handlers = app.slice(app.indexOf(' // AI Review submission'), app.indexOf(' // Initial Startup'));
 
 function harness({draft} = {}) {
@@ -21,7 +21,7 @@ function harness({draft} = {}) {
     dialogue:{role:'',turns:[],summary:'',origin:'',generation:null}, dialogueRevision:0, dialogueBusy:false, dialogueRequest:null, practiceAutopickRole:null,
     $:s=>elements[s], api, escapeHtml:s=>String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),
     TextEncoder, crypto:{subtle:{digest:(_algorithm,input)=>createHash('sha256').update(input).digest()},randomUUID:()=>`request-${++count}`}, sessionStorage:{getItem:k=>storage.get(k) || null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
-    writeDraft:draft || (async()=>{}), refresh:async()=>{}, setQuestionContext:c=>{ctx.questionContext=c;}, window:{confirm:()=>true},
+    requests:new Set(), writeDraft:draft || (async()=>{}), refresh:async()=>{}, setQuestionContext:c=>{ctx.questionContext=c;}, window:{confirm:()=>true},
     clearPracticeHelp:()=>{}, clearRecommendationChoice:()=>{}, scheduleDraft:()=>{},
   });
   vm.runInContext(handlers,ctx);

@@ -9,7 +9,7 @@
   "main": "desktop/main.cjs",
   "scripts": {
     "start": "node --env-file-if-exists=.env server.js",
-    "test": "node --test",
+    "test": "node scripts/test.mjs",
     "release:check": "node scripts/check-release.mjs",
     "check": "npm test && npm run release:check && npm run demo:build",
     "demo:build": "node scripts/build-demo.mjs",

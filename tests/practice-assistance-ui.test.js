@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
-const app=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
+const app=await readFile(new URL('../public/ui/practice.js',import.meta.url),'utf8');
 const help=app.slice(app.indexOf(' // Optional AI help'),app.indexOf(' // Recommend a different eligible question'));
 const clearHelp=app.slice(app.indexOf(' function clearPracticeHelp()'),app.indexOf('\n function clearRecommendationChoice()'));
 const clearChoice=app.slice(app.indexOf(' function clearRecommendationChoice()'),app.indexOf('\n function loadPracticeQuestion('));
-const loadQuestion=app.slice(app.indexOf(' function loadPracticeQuestion('),app.indexOf('\n async function openSourceQuestionEditor'));
+const loadQuestion=app.slice(app.indexOf(' function loadPracticeQuestion('),app.indexOf('\n function practiceSourceQuestion'));
 const recommendations=app.slice(app.indexOf(' // Recommend a different eligible question'),app.indexOf(' // Answer character counter'));
 
 function helpHarness() {

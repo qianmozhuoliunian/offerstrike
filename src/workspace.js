@@ -4,24 +4,7 @@ import { recommendFromHistory } from './recommendation.js';
 import { validateQuestionRef } from './question-identity.js';
 import { validateDate } from './core.js';
 
-export function initializeWorkspace(db) {
-  const sourceColumns = db.prepare('PRAGMA table_info(sources)').all().map(column => column.name);
-  if (!sourceColumns.includes('interview_date')) db.exec("ALTER TABLE sources ADD COLUMN interview_date TEXT NOT NULL DEFAULT ''");
-  const questionColumns = db.prepare('PRAGMA table_info(questions)').all().map(column => column.name);
-  if (!questionColumns.includes('note')) db.exec("ALTER TABLE questions ADD COLUMN note TEXT NOT NULL DEFAULT ''");
-  db.exec(`CREATE TABLE IF NOT EXISTS job_profiles (role TEXT PRIMARY KEY, jd TEXT NOT NULL, confirmed_requirements TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS drafts (role TEXT PRIMARY KEY, question TEXT NOT NULL, answer TEXT NOT NULL, updated TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS debriefs (id TEXT PRIMARY KEY, role TEXT NOT NULL, company TEXT NOT NULL, interview_date TEXT NOT NULL, question TEXT NOT NULL, answer TEXT NOT NULL, notes TEXT NOT NULL, include_in_library INTEGER NOT NULL DEFAULT 0, created TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS attempt_assessments (attempt_id TEXT PRIMARY KEY, rating TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS attempt_details (attempt_id TEXT PRIMARY KEY, follow_up TEXT NOT NULL DEFAULT '', parent_attempt_id TEXT NOT NULL DEFAULT '');
-    CREATE TABLE IF NOT EXISTS draft_contexts (role TEXT PRIMARY KEY, parent_attempt_id TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS attempt_question_links (attempt_id TEXT PRIMARY KEY, kind TEXT NOT NULL, question_id TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS draft_question_links (role TEXT PRIMARY KEY, kind TEXT NOT NULL, question_id TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS dialogue_origins (attempt_id TEXT PRIMARY KEY, origin TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS dialogue_summaries (attempt_id TEXT PRIMARY KEY, summary TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS dialogue_coaching (attempt_id TEXT PRIMARY KEY, focus TEXT NOT NULL, evidence TEXT NOT NULL, next_step TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS dialogue_requests (request_id TEXT PRIMARY KEY, attempt_id TEXT NOT NULL);`);
-}
+export { initializeWorkspace } from './database.js';
 
 function bounded(value, max, name) {
   const text = String(value ?? '').trim();

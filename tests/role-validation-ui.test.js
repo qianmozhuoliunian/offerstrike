@@ -12,7 +12,7 @@ function harness(accept) {
   const elements={'#role':role,'#role-validation-status':status,'#role-form':form};
   const api=(path,method,data)=>new Promise((resolve,reject)=>calls.push({path,method,data,resolve,reject}));
   const toast={success:value=>messages.push(value),error:value=>messages.push(value)};
-  const context=vm.createContext({state:{role:'已有岗位'},api,toast,canSwitchRole:()=>true,writeDraft:async()=>{},refresh:async()=>{},showRoleNext(){},window:{confirm:()=>accept},$:selector=>elements[selector],$$:selector=>selector==='.preset-chip' ? [] : controls});
+  const context=vm.createContext({state:{role:'已有岗位'},api,toast,canSwitchRole:()=>true,practiceController:{flushDraft:async()=>{}},refresh:async()=>{},showRoleNext(){},window:{confirm:()=>accept},$:selector=>elements[selector],$$:selector=>selector==='.preset-chip' ? [] : controls});
   vm.runInContext(`let roleSaveBusy=false; ${handlers}`,context);
   return {context,calls,messages,controls,status};
 }

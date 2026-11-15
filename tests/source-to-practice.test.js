@@ -5,8 +5,8 @@ import vm from 'node:vm';
 
 const app = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
 const handlers = app.slice(app.indexOf(' // Sources list item click actions'), app.indexOf(" $('#attempt-role-scope').addEventListener"));
-const openEditor = app.slice(app.indexOf(' async function openSourceQuestionEditor'), app.indexOf('\n function practiceSourceQuestion'));
-const openPracticeSource = app.slice(app.indexOf(' function openPracticeSource'), app.indexOf('\n function clearPracticeHelp'));
+const openEditor = app.slice(app.indexOf(' async function openSourceQuestionEditor'), app.indexOf('\n function canSwitchRole'));
+const openPracticeSource = app.slice(app.indexOf(' function openPracticeSource'), app.indexOf('\n async function openSourceQuestionEditor'));
 
 test('practice returns to the correct library question and resets filters', () => {
   const events=[], scope={value:'all'}, target={isConnected:true,scrollIntoView:()=>events.push('scroll'),focus:()=>events.push('focus')};
@@ -41,7 +41,7 @@ function harness() {
   const context=vm.createContext({state,questionDrafts,questionSaveStates,noteDrafts:new Map(),api,toast,renderSources:()=>{},
     $:selector=>selector==='#sources' ? container : null,
     refresh:async()=>{source.questions=[{id:'question-1',text:textarea.value.trim(),topic:topic.value}];},
-    practiceSourceQuestion:(s,q)=>{practiced.push({source:s.id,question:q.id}); return true;}});
+    practiceController:{openSourceQuestion:(s,q)=>{practiced.push({source:s.id,question:q.id}); return true;}}});
   vm.runInContext(`let roleRevision=0; ${handlers}`,context);
   return {events,calls,messages,practiced,context,state,questionDrafts,textarea,topic,save,practice,status,target};
 }

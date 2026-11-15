@@ -32,16 +32,17 @@ try {
   await mkdir(stage);
   for (const [from,to] of [
     ['../demo/demo.js','demo.js'],['../demo/demo.css','demo.css'],
+    ['../public/assets/offerstrike-icon.png','offerstrike-icon.png'],['../public/assets/offerstrike.ico','offerstrike.ico'],
     ['../src/recommendation.js','recommendation.js'],['../public/assets/interview-study-illustration.png','illustration.png']
   ]) await copyFile(source(from),join(stage,to));
 
   let html = await readFile(source('../demo/index.html'),'utf8');
   if (withDownload) {
-    const installer = join(dist,'windows','OfferPilot-Setup.exe');
+    const installer = join(dist,'windows','OfferStrike-Setup.exe');
     const info = await lstat(installer).catch(()=>null);
     if (!info?.isFile() || info.isSymbolicLink()) throw Error('请先运行 npm run desktop:build 生成 Windows 安装包');
     await mkdir(join(stage,'desktop'));
-    await copyFile(installer,join(stage,'desktop','OfferPilot-Setup.exe'));
+    await copyFile(installer,join(stage,'desktop','OfferStrike-Setup.exe'));
     html = html.replace('<html lang="zh-CN">','<html lang="zh-CN" data-desktop-download>');
   }
   await writeFile(join(stage,'index.html'),html);

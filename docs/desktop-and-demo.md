@@ -17,10 +17,10 @@ npm run demo:preview
 
 在 Windows 运行 `npm run desktop:build`，产物位于 `dist/windows/`：
 
-- `OfferPilot-Setup.exe`：当前用户安装程序。
-- `OfferPilot-0.1.0-win.zip`：便携程序，先解压整个目录，再双击 `OfferPilot.exe`。
+- `OfferStrike-Setup.exe`：当前用户安装程序。
+- `OfferStrike-0.1.0-win.zip`：便携程序，先解压整个目录，再双击 `OfferStrike.exe`。
 
-两种方式都自带运行时。当前为未签名的 Windows x64 测试版，不提供自动更新。资料位于 `%APPDATA%\OfferPilot\workbench\interview.sqlite`，安装路径和项目源码目录均不保存这份数据。
+两种方式都自带运行时。当前为未签名的 Windows x64 测试版，不提供自动更新。资料位于 `%APPDATA%\OfferPilot\workbench\interview.sqlite`，安装路径和项目源码目录均不保存这份数据。更名为 OfferStrike 后仍沿用此旧目录，已有题库和加密服务配置无需迁移。
 
 清空桌面版时，退出应用后删除该数据目录下的 `interview.sqlite` 及同名 SQLite 辅助文件。`services.enc` 是加密的服务配置，删除它会移除本机配置。另行导出的 JSON 需要到保存位置删除。
 

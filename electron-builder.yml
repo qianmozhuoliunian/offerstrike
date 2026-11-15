@@ -1,5 +1,6 @@
+# Keep the installer identity stable for existing installations.
 appId: com.offerpilot.workbench
-productName: OfferPilot
+productName: OfferStrike
 asar: true
 directories:
   output: dist/windows
@@ -11,12 +12,13 @@ files:
   - package.json
   - LICENSE
 win:
-  signAndEditExecutable: false
+  icon: public/assets/offerstrike.ico
+  signExecutable: false
   target:
     - nsis
     - zip
 nsis:
-  artifactName: OfferPilot-Setup.exe
+  artifactName: OfferStrike-Setup.exe
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true

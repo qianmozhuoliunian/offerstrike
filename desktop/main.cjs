@@ -1,9 +1,14 @@
 const {app,BrowserWindow,dialog,ipcMain,safeStorage,session,shell,utilityProcess}=require('electron');
 const {randomBytes}=require('node:crypto');
 const {mkdir,readFile,writeFile,rename}=require('node:fs/promises');
+const {mkdirSync}=require('node:fs');
 const path=require('node:path');
 
-app.setName('OfferPilot');
+// Keep the existing database and encrypted settings across the brand rename.
+const legacyUserData=path.join(app.getPath('appData'),'OfferPilot');
+mkdirSync(legacyUserData,{recursive:true});
+app.setPath('userData',legacyUserData);
+app.setName('OfferStrike');
 const keys=['TAVILY_API_KEY','EXA_API_KEY','AI_API_KEY','AI_MODEL','AI_BASE_URL'];
 const secrets=keys.slice(0,3);
 const home=()=>path.join(app.getPath('userData'),'workbench');
@@ -92,7 +97,7 @@ async function start() {
   isolated.webRequest.onBeforeSendHeaders({urls:[address+'/*']},(details,callback)=>{
     callback({requestHeaders:{...details.requestHeaders,'X-Interview-Desktop':token}});
   });
-  window=new BrowserWindow({width:1320,height:900,minWidth:720,minHeight:600,title:'见面 · 面试准备工作台',
+  window=new BrowserWindow({width:1320,height:900,minWidth:720,minHeight:600,title:'面试突击 · OfferStrike',icon:path.join(__dirname,'..','public','assets','offerstrike-icon.png'),
     autoHideMenuBar:true,webPreferences:{session:isolated,preload:path.join(__dirname,'preload.cjs'),
       contextIsolation:true,sandbox:true,nodeIntegration:false,webviewTag:false}});
   window.webContents.on('will-navigate',(event,url)=>{if(new URL(url).origin!==address) event.preventDefault();});

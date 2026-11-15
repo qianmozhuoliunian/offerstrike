@@ -1,4 +1,4 @@
-# OfferPilot AI：Agent 架构升级方案
+# OfferStrike AI：Agent 架构升级方案
 
 阶段 0 · 2026-11-13 · 审查基线 `6a97a58`。下文的仓库现状描述该基线；此后实现和验收进展见 [Agent 使用与验收](agent-evaluation.md)。
 

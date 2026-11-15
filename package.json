@@ -1,9 +1,9 @@
 {
-  "name": "interview-workbench",
+  "name": "offerstrike",
   "version": "0.1.0",
   "private": true,
-  "description": "OfferPilot 面试准备工作台",
-  "author": "OfferPilot",
+  "description": "面试突击 · OfferStrike",
+  "author": "OfferStrike contributors",
   "license": "MIT",
   "type": "module",
   "main": "desktop/main.cjs",

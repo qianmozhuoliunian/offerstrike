@@ -6,7 +6,7 @@ import { mountDesktopSettings } from './ui/desktop-controls.js';
 import { renderGettingStarted } from './ui/getting-started.js';
 
  /**
-  * 见面 · 面试准备助手 (Apple HIG Design System Implementation)
+  * 面试突击 · OfferStrike (Apple HIG Design System Implementation)
   * Client Application Logic
   */
 

@@ -1,6 +1,8 @@
-# 见面 · OfferPilot
+<p align="center"><img src="public/assets/offerstrike-icon.png" width="96" height="96" alt="面试突击品牌图标"></p>
 
-**把公开面经整理成自己的题库，再用作答和自评安排下一次练习。**
+# 面试突击 · OfferStrike
+
+**别再盲刷题，针对下一场面试出击。**
 
 面向正在准备面试的求职者，本机单用户使用。适合希望保留原帖依据、长期整理和复习的人。目前为 **v0.1.0 初版**，搜索相关性和 AI 点评仍需要人工核对。
 

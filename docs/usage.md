@@ -67,7 +67,7 @@ npm start
 - 用户主动从原文提取候选题时，粘贴的完整内容会发送给配置的 AI 服务；最多 12000 个 Unicode 字符，超出时需分段。完整原文不会保存，确认题目后只保存题干、对应摘录及来源关联；备份包含这些摘录。
 - 不配置相应服务时，可继续手动管理本地资料。请求超时或失败时可重试。
 
-Windows 网页版默认使用 `%LOCALAPPDATA%\OfferPilot\web-workbench\interview.sqlite`，其他系统使用 `data/interview.sqlite`。如需清空网页工作台，先退出服务，再删除数据库及其同名的 `-wal`、`-shm` 和 `-journal` 文件，并删除你保存的 JSON 备份。桌面版路径见[桌面版与公开体验页](desktop-and-demo.md)。清除本地密钥后，可在对应服务商的控制台撤销旧密钥。
+OfferStrike 为兼容旧版沿用原数据目录：Windows 网页版默认使用 `%LOCALAPPDATA%\OfferPilot\web-workbench\interview.sqlite`，其他系统使用 `data/interview.sqlite`。如需清空网页工作台，先退出服务，再删除数据库及其同名的 `-wal`、`-shm` 和 `-journal` 文件，并删除你保存的 JSON 备份。桌面版路径见[桌面版与公开体验页](desktop-and-demo.md)。清除本地密钥后，可在对应服务商的控制台撤销旧密钥。
 
 Windows 旧版资料可能留在项目的 `data/interview.sqlite`。需要迁移时，先关闭旧服务并在项目根目录运行 `$env:INTERVIEW_DATA_DIR = (Resolve-Path .\data).Path` 和 `npm start`，在网页导出 JSON。关闭服务并运行 `Remove-Item Env:INTERVIEW_DATA_DIR` 后重新启动，再导入并检查新目录中的资料。迁移成功后，请删除旧数据库和中转 JSON。
 

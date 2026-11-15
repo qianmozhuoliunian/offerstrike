@@ -10,12 +10,14 @@ const files = new Map([
   ['/demo.css', ['demo.css','text/css']],
   ['/demo.js', ['demo.js','text/javascript']],
   ['/recommendation.js', ['recommendation.js','text/javascript']],
-  ['/illustration.png', ['illustration.png','image/png']]
+  ['/illustration.png', ['illustration.png','image/png']],
+  ['/offerstrike-icon.png', ['offerstrike-icon.png','image/png']],
+  ['/offerstrike.ico', ['offerstrike.ico','image/x-icon']]
 ]);
 const dir = new URL('../dist/demo/', import.meta.url);
 const port = Number(process.env.DEMO_PORT || 8090);
 const hasInstaller = (await readFile(new URL('index.html',dir),'utf8')).includes('data-desktop-download');
-if (hasInstaller) files.set('/desktop/OfferPilot-Setup.exe',['desktop/OfferPilot-Setup.exe','application/octet-stream']);
+if (hasInstaller) files.set('/desktop/OfferStrike-Setup.exe',['desktop/OfferStrike-Setup.exe','application/octet-stream']);
 const server = createServer(async (req,res) => {
   setPrivateResponseHeaders(res,{demo:true});
   if (!isAllowedRequest(req,server.address().port)) return res.writeHead(403).end('Forbidden');

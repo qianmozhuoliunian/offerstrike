@@ -1,6 +1,6 @@
  /* ==========================================================================
     Lens UI: shared tokens and component foundations
-    "见面 · 面试准备助手"
+    "面试突击 · OfferStrike"
     ========================================================================== */
 
  :root {
@@ -3021,3 +3021,7 @@ body {
 #getting-started p { margin: 12px 0; font-size: 14px; line-height: 1.75; }
 #getting-started .agent-actions { margin-block: 16px; }
 #search-config-hint, #practice-config-hint { font-size: 14px; line-height: 1.75; }
+
+/* GPT-generated brand artwork keeps its own transparent silhouette. */
+.brand .brand-glyph { width: 40px; height: 40px; background: transparent; box-shadow: none; flex-shrink: 0; }
+.brand-glyph img { display: block; width: 40px; height: 40px; object-fit: contain; }

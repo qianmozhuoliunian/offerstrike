@@ -221,6 +221,8 @@ const files = {
   '/ui/practice.js': [new URL('./public/ui/practice.js', import.meta.url), 'text/javascript'],
   '/ui/getting-started.js': [new URL('./public/ui/getting-started.js', import.meta.url), 'text/javascript'],
   '/assets/interview-study-illustration.png': [new URL('./public/assets/interview-study-illustration.png', import.meta.url), 'image/png'],
+  '/assets/offerstrike-icon.png': [new URL('./public/assets/offerstrike-icon.png', import.meta.url), 'image/png'],
+  '/assets/offerstrike.ico': [new URL('./public/assets/offerstrike.ico', import.meta.url), 'image/x-icon'],
   '/assets/interview-discover.png': [new URL('./public/assets/interview-discover.png', import.meta.url), 'image/png'],
   '/assets/interview-practice.png': [new URL('./public/assets/interview-practice.png', import.meta.url), 'image/png'],
   '/assets/interview-planning.png': [new URL('./public/assets/interview-planning.png', import.meta.url), 'image/png'],

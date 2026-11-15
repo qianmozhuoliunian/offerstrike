@@ -44,7 +44,8 @@ test('demo build only publishes explicit static assets and replaces stale files'
   const dir = mkdtempSync(join(tmpdir(),'offerpilot-demo-'));
   try {
     const files = ['scripts/build-demo.mjs','src/request-security.js','src/recommendation.js',
-      'demo/index.html','demo/demo.js','demo/demo.css','public/assets/interview-study-illustration.png'];
+      'demo/index.html','demo/demo.js','demo/demo.css','public/assets/interview-study-illustration.png',
+      'public/assets/offerstrike-icon.png','public/assets/offerstrike.ico'];
     for (const file of files) {
       mkdirSync(dirname(join(dir,file)),{recursive:true});
       copyFileSync(join(root,file),join(dir,file));
@@ -55,8 +56,14 @@ test('demo build only publishes explicit static assets and replaces stale files'
     writeFileSync(join(dir,'dist/demo/stale.json'),'old fixture');
     execFileSync(process.execPath,['scripts/build-demo.mjs'],{cwd:dir,stdio:'pipe'});
     assert.deepEqual(readdirSync(join(dir,'dist/demo')).sort(),
-      ['_headers','demo.css','demo.js','illustration.png','index.html','recommendation.js'].sort());
+      ['_headers','demo.css','demo.js','illustration.png','index.html','recommendation.js','offerstrike-icon.png','offerstrike.ico'].sort());
     assert.match(readFileSync(join(dir,'dist/demo/_headers'),'utf8'),/connect-src 'none'/);
     assert.doesNotMatch(readFileSync(join(dir,'dist/demo/index.html'),'utf8'),/data-desktop-download/);
+    mkdirSync(join(dir,'dist/windows'),{recursive:true});
+    writeFileSync(join(dir,'dist/windows/OfferStrike-Setup.exe'),'isolated installer fixture');
+    execFileSync(process.execPath,['scripts/build-demo.mjs','--desktop-download'],{cwd:dir,stdio:'pipe'});
+    assert.match(readFileSync(join(dir,'dist/demo/index.html'),'utf8'),/data-desktop-download/);
+    assert.match(readFileSync(join(dir,'dist/demo/index.html'),'utf8'),/\.\/desktop\/OfferStrike-Setup\.exe/);
+    assert.equal(readFileSync(join(dir,'dist/demo/desktop/OfferStrike-Setup.exe'),'utf8'),'isolated installer fixture');
   } finally {rmSync(dir,{recursive:true,force:true});}
 });

@@ -28,7 +28,7 @@ export async function readArticle(url, signal, fetcher = fetch) {
   const safe = articleUrl(url);
   if (!safe) throw Error('unsupported_source');
   const res = await fetcher(safe, {redirect:'error', signal:AbortSignal.any([signal, AbortSignal.timeout(9000)]),
-    headers:{accept:'text/html', 'user-agent':'OfferPilotResearch/1.0'}});
+    headers:{accept:'text/html', 'user-agent':'OfferStrikeResearch/1.0'}});
   if (!res.ok || !/^text\/html\b/i.test(res.headers.get('content-type') ?? '') ||
       Number(res.headers.get('content-length')) > MAX_BYTES || !res.body) {
     await res.body?.cancel();

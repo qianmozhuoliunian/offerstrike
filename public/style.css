@@ -2252,7 +2252,6 @@ body { background: var(--lens-bg); }
 .library-count { display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; border-radius: 999px; background: #edf1f8; color: var(--lens-text-secondary); font-size: 11px; font-weight: 600; }
 .library-source-panel { padding: 22px 24px 24px; border: 1px solid var(--lens-border); border-radius: 16px; background: #fff; box-shadow: 0 5px 20px rgba(32,47,76,.04); }
 .library-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--lens-divider); }
-.library-filter-label { color: var(--lens-text-secondary); font-size: 12px; font-weight: 650; }
 .library-filter-bar { flex: 1; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; }
 .library-filter-bar .filter-pill { min-height: 34px; padding: 6px 12px; border-radius: 8px; color: var(--lens-text-secondary); background: #f5f7fa; border-color: transparent; font-size: 12px; }
 .library-filter-bar .filter-pill:hover { color: var(--lens-primary); background: #edf2ff; }
@@ -3025,3 +3024,9 @@ body {
 /* GPT-generated brand artwork keeps its own transparent silhouette. */
 .brand .brand-glyph { width: 40px; height: 40px; background: transparent; box-shadow: none; flex-shrink: 0; }
 .brand-glyph img { display: block; width: 40px; height: 40px; object-fit: contain; }
+
+/* Compact action cards after removing redundant helper copy. */
+.feature-grid .feature-card { min-height: 132px; }
+@media (max-width: 640px) {
+  .feature-grid .feature-card { min-height: 112px; }
+}

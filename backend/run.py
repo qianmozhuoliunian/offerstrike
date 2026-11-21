@@ -38,7 +38,7 @@ def main():
                 await asyncio.sleep(.02)
             if server.started:
                 address = f"http://127.0.0.1:{arguments.port}"
-                print(f"OFFERSTRIKE_READY {address}" if desktop_token else f"本机工作台 {address}/#access={token}", flush=True)
+                print(f"OFFERSTRIKE_READY {address}" if desktop_token else f"OfferStrike {address}/#access={token}", flush=True)
         announcement = asyncio.create_task(announce())
         try:
             await server.serve()

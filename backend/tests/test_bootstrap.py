@@ -14,7 +14,8 @@ def test_web_runner_announces_after_listening_and_uses_isolated_data(tmp_path):
             listener.bind(('127.0.0.1', 0))
             port = listener.getsockname()[1]
         root = Path(__file__).resolve().parents[2]
-        env = {**os.environ, 'AI_API_KEY': 'synthetic-bootstrap', 'AI_MODEL': 'synthetic-model', 'AI_BASE_URL': 'https://api.openai.com/v1'}
+        env = {**os.environ, 'AI_API_KEY': 'synthetic-bootstrap', 'AI_MODEL': 'synthetic-model', 'AI_BASE_URL': 'https://api.openai.com/v1',
+               'PYTHONIOENCODING': 'ascii:strict'}
         env.pop('INTERVIEW_DESKTOP_TOKEN', None)
         process = await asyncio.create_subprocess_exec(sys.executable, '-u', '-m', 'backend.run', '--port', str(port), '--data-dir', str(tmp_path),
             cwd=root, env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)

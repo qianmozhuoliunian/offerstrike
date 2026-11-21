@@ -6,10 +6,11 @@ import vm from 'node:vm';
 import { renderAbilityEvaluation } from '../public/ui/ability-evaluation.js';
 
 const source = await readFile(new URL('../public/ui/practice.js',import.meta.url),'utf8');
-const tick = () => new Promise(resolve => setImmediate(resolve));
 
-function harness() {
+function harness(cryptoProvider = webcrypto) {
   const nodes = new Map(), calls = [], drafts = [], notifications = [], storage = new Map();
+  let resolveFirstCall;
+  const firstCall = new Promise(resolve=>{resolveFirstCall=resolve;});
   function node(key) {
     if (!nodes.has(key)) nodes.set(key,{
       value:'',textContent:'',innerHTML:'',hidden:false,disabled:false,readOnly:false,dataset:{},events:new Map(),
@@ -21,11 +22,14 @@ function harness() {
   }
   const document = {querySelector:node,querySelectorAll:()=>[],createElement:()=>node(Symbol()),createTextNode:text=>text};
   const context = vm.createContext({document,renderAbilityEvaluation,window:{confirm:()=>true,addEventListener(){}},AbortController,setTimeout,clearTimeout,
-    TextEncoder,crypto:webcrypto,URL,sessionStorage:{getItem:key=>storage.get(key) || null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)}});
+    TextEncoder,crypto:cryptoProvider,URL,sessionStorage:{getItem:key=>storage.get(key) || null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)}});
   vm.runInContext(source.slice(source.indexOf('export function')).replace('export function','function'),context);
   const api = (path,method,data,signal) => {
     if (path === '/api/draft') { drafts.push(data); return Promise.resolve({}); }
-    return new Promise((resolve,reject)=>calls.push({path,method,data,signal,resolve,reject}));
+    return new Promise((resolve,reject)=>{
+      calls.push({path,method,data,signal,resolve,reject});
+      resolveFirstCall(calls[0]);
+    });
   };
   const toast = message=>notifications.push(message);
   toast.error=toast; toast.success=toast;
@@ -33,7 +37,7 @@ function harness() {
     openSource:()=>{},openTab:()=>{},onAnswered:()=>notifications.push('answered'),onCompleted:()=>notifications.push('completed'),onAssessed:()=>notifications.push('assessed')});
   const sync = (role,question='',answer='') => controller.sync({role,practiceScope:role,sources:[],attempts:[],draft:{question,answer}});
   const fire = async (key,type,event={}) => { for (const handler of node(key).events.get(type) || []) await handler({preventDefault(){},currentTarget:node(key),...event}); };
-  return {controller,sync,fire,node,calls,drafts,notifications};
+  return {controller,sync,fire,node,calls,drafts,notifications,firstCall};
 }
 
 test('mounted practice controller preserves edits on refresh and writes the correct linked draft', async () => {
@@ -88,11 +92,14 @@ test('mounted controller cancels role-scoped requests and ignores old responses 
   assert.equal(harnessState.node('#answer').value,'新草稿');
 });
 
-test('mounted controller completes a turn and self-assessment through its real event wiring', async () => {
-  const harnessState = harness();
+test('mounted controller completes a turn and self-assessment through its real event wiring', {timeout:5000}, async () => {
+  const harnessState = harness({randomUUID:()=>webcrypto.randomUUID(),subtle:{async digest(...args) {
+    await new Promise(resolve=>setTimeout(resolve,50));
+    return webcrypto.subtle.digest(...args);
+  }}});
   harnessState.sync('产品','问题','回答');
   const pending=harnessState.fire('#review-form','submit');
-  for (let count=0;count<30 && !harnessState.calls.length;count++) await tick();
+  await harnessState.firstCall;
   assert.equal(harnessState.calls[0].path,'/api/practice/dialogue/turn');
   harnessState.calls[0].resolve({id:'turn-1',feedback:'模拟点评',follow_up:'',origin:'user'});
   await pending;

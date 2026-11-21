@@ -4,6 +4,7 @@ import { createSourceExtraction } from './ui/source-extraction.js';
 import { mountAgentWorkflow } from './ui/agent-workflow.js';
 import { mountDesktopSettings } from './ui/desktop-controls.js';
 import { renderGettingStarted } from './ui/getting-started.js';
+import { renderAbilityEvaluation } from './ui/ability-evaluation.js';
 
  /**
   * 面试突击 · OfferStrike (Apple HIG Design System Implementation)
@@ -109,9 +110,11 @@ import { renderGettingStarted } from './ui/getting-started.js';
 const toast = createToast(escapeHtml);
 const sourceExtraction = createSourceExtraction({api, getSource:id=>state.sources.find(source=>source.id===id), refresh, escapeHtml, toast});
 const practiceController = mountPractice({api,fetchLocal,refresh,toast,escapeHtml,openSource:openPracticeSource,openTab:switchTab,
-  onAnswered:(...args)=>agents.answered(...args),onCompleted:(...args)=>agents.completed(...args),onAssessed:()=>agents.assessed()});
+  onAnswered:(...args)=>agents.answered(...args),onCompleted:(...args)=>agents.completed(...args),onAssessed:()=>agents.assessed(),
+  onTraining:()=>agents.showPlan()});
 const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:roleRevision}),openTab:switchTab,
-  startQuestion:question=>practiceController.openQuestion(question),refresh});
+  startQuestion:(question,options)=>practiceController.openQuestion(question,options),
+  continueQuestion:followup=>practiceController.openFollowup(followup),refresh});
 
  /* ==========================================================================
    Tab Navigation Architecture (Emil's Blur Crossfade Masking)
@@ -465,6 +468,7 @@ const agents = mountAgentWorkflow({api,context:()=>({role:state.role,revision:ro
          <div class="attempt-question">Q: ${escapeHtml(a.question)}</div>
          <div class="attempt-answer"><strong>你的作答：</strong>${escapeHtml(a.answer)}</div>
          <div class="attempt-feedback">${a.feedback ? escapeHtml(a.feedback) : '尚未获取 AI 点评。'}</div>
+         ${renderAbilityEvaluation(a.evaluation,escapeHtml)}
          ${!a.feedback && a.role===state.role && state.aiConfigured ? `<button type="button" class="apple-btn apple-btn-secondary compact" data-local-feedback="${escapeHtml(a.id)}">获取 AI 点评</button>` : ''}
           <label>本次自评 <select class="apple-select" data-attempt-assessment="${escapeHtml(a.id)}" aria-label="本次练习自评">
             <option value="unassessed" ${!a.rating ? 'selected' : ''}>尚未自评</option>

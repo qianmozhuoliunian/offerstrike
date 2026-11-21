@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import vm from 'node:vm';
+import { renderAbilityEvaluation } from '../public/ui/ability-evaluation.js';
 
 // Exercise the actual event handlers with controlled network responses.
 const app = await readFile(new URL('../public/ui/practice.js', import.meta.url), 'utf8');
@@ -18,6 +19,7 @@ function harness({draft} = {}) {
   let count=0;
   const ctx=vm.createContext({
     state:{role:'产品经理',practiceScope:'opaque-scope'}, questionContext:{text:'如何做需求分析？',questionRef:{kind:'source',id:'q1'}}, roleRevision:0,
+    renderAbilityEvaluation,
     dialogue:{role:'',turns:[],summary:'',origin:'',generation:null}, dialogueRevision:0, dialogueBusy:false, dialogueRequest:null, practiceAutopickRole:null,
     $:s=>elements[s], api, escapeHtml:s=>String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),
     TextEncoder, crypto:{subtle:{digest:(_algorithm,input)=>createHash('sha256').update(input).digest()},randomUUID:()=>`request-${++count}`}, sessionStorage:{getItem:k=>storage.get(k) || null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},
@@ -51,6 +53,19 @@ test('a sourced question stays in one conversation through a follow-up and summa
   h.calls[2].resolve({summary:'总结：下次补充验证方法'}); await finish;
   assert.match(h.elements['#dialogue-stream'].innerHTML,/总结：下次补充验证方法/);
   assert.match(h.elements['#dialogue-stream'].innerHTML,/查看之前的 2 轮对话/);
+});
+
+test('a scored turn shows its evaluation next to the existing commentary',async()=>{
+  const h=harness();const first=submit(h);await tick();
+  h.calls[0].resolve({id:'turn-1',feedback:'保留自然语言点评',follow_up:'',evaluation:{topic:'需求分析',
+    strengths:[{point:'确认用户问题',evidence:'用户问题<原文>'}],weaknesses:[{point:'缺少验证方法',type:'missing',evidence:'先了解用户问题',requirement:'如何验证'}],
+    unverified:['指标选择'],recommended_action:'review'}});await first;
+  const html=h.elements['#dialogue-stream'].innerHTML;
+  assert.match(html,/保留自然语言点评/);
+  assert.match(html,/用户问题&lt;原文&gt;/);
+  assert.match(html,/本轮遗漏/);
+  assert.match(html,/尚未验证/);
+  assert.match(html,/如何验证/);
 });
 
 test('failed sends preserve the answer and retry with the same idempotency key', async () => {

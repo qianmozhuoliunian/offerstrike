@@ -305,7 +305,9 @@
             <form id="research-form" class="apple-form-vertical">
               <label for="research-topics">公开搜索主题（逗号分隔，最多 4 个）</label>
               <input id="research-topics" maxlength="164" placeholder="例如：RAG，工具调用">
-              <p class="search-privacy">沿用上方岗位、公司、时间和来源。公开主题会发给搜索服务，也可能和岗位一起发给 AI 协助补搜。只自动读取可访问的博客园文章，每篇最多发送正文前 6000 字给 AI。读不到时可打开原帖并手动整理。请勿填入私密 JD 内容。</p>
+              <p id="research-task-scope" class="search-privacy"></p>
+              <button type="button" class="text-link-action" id="research-task-clear" hidden>返回普通研究</button>
+              <p class="search-privacy">岗位、公司和主题会发给搜索服务，也可能发给已配置的 AI 服务。支持读取博客园文章和公开可用的牛客讨论帖。每篇最多向 AI 发送正文前 6000 个字符，试点还会发送不超过 300 个字符的原帖标题和正文标题层级。读不到时可打开原帖并手动整理。请使用愿意公开的关键词。</p>
               <div class="agent-actions"><button class="apple-btn apple-btn-primary" type="submit">确认并研究</button><button class="apple-btn apple-btn-secondary" id="research-cancel" type="button" hidden>取消研究</button></div>
             </form>
             <p id="research-status" role="status" aria-live="polite"></p>
@@ -324,12 +326,22 @@
           <summary>备战计划与多题模拟</summary>
           <form id="career-form" class="apple-form-vertical">
             <label for="career-topics">本次训练主题（逗号分隔，最多 4 个）</label>
-            <input id="career-topics" maxlength="164" placeholder="留空按题库和自评推荐">
+            <input id="career-topics" maxlength="164" placeholder="留空根据岗位和近期作答安排">
             <p id="career-requirements" class="search-privacy"></p>
             <div class="agent-actions"><button class="apple-btn apple-btn-primary" type="submit">安排下一步</button><button class="apple-btn apple-btn-secondary" type="button" id="career-mock">开始 3 题模拟</button></div>
           </form>
           <p id="career-status" role="status" aria-live="polite"></p>
           <div id="career-tasks"></div>
+          <details id="career-training-panel">
+            <summary>补题任务</summary>
+            <button type="button" class="text-link-action" id="career-training-refresh">刷新任务状态</button>
+            <p id="career-training-status" role="status"></p>
+            <div id="career-training-tasks"></div>
+          </details>
+          <details id="career-profile" hidden>
+            <summary>当前岗位能力画像</summary>
+            <div id="career-profile-points"></div>
+          </details>
           <details>
             <summary>可选：提取简历里的能力线索</summary>
             <form id="career-resume-form" class="apple-form-vertical">

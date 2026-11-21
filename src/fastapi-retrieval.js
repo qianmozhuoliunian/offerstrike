@@ -5,12 +5,12 @@ export function createFastApiRetrieval(address, token, fetcher = fetch) {
     throw Error('RESEARCH_SERVICE_URL 必须是本机地址，例如 http://127.0.0.1:8091');
   }
   const endpoint = new URL('/v1/retrieve', base);
-  return async ({provider, role, company, domains, phrase, from, today}) => {
+  return async ({provider, role, company, domains, phrase, topic, from, today, signal}) => {
     if (!/^[a-f0-9]{64}$/.test(token || '')) throw Error('请为 Node 和 FastAPI 配置同一研究服务访问凭证');
     const response = await fetcher(endpoint, {
-      method:'POST', redirect:'error', signal:AbortSignal.timeout(13_000),
+      method:'POST', redirect:'error', signal:signal ? AbortSignal.any([signal, AbortSignal.timeout(13_000)]) : AbortSignal.timeout(13_000),
       headers:{'content-type':'application/json','x-offerpilot-retrieval':token},
-      body:JSON.stringify({provider, role, company, domains, phrase,
+      body:JSON.stringify({provider, role, company, domains, phrase, topic,
         from_date:from ?? null, through_date:from ? today : null})
     });
     if (!response.ok) throw Error('Python 研究服务检索失败');

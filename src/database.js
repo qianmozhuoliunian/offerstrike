@@ -1,4 +1,4 @@
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 3;
 
 export function migrateDatabase(db) {
   const version = db.prepare('PRAGMA user_version').get().user_version;
@@ -9,7 +9,7 @@ export function migrateDatabase(db) {
     db.exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL, date TEXT NOT NULL, type TEXT NOT NULL, question TEXT NOT NULL, role TEXT NOT NULL, created TEXT NOT NULL); CREATE TABLE IF NOT EXISTS attempts (id TEXT PRIMARY KEY, question TEXT NOT NULL, answer TEXT NOT NULL, feedback TEXT NOT NULL, role TEXT NOT NULL, created TEXT NOT NULL);`);
     initializeQuestions(db);
     initializeWorkspace(db);
-    db.exec('PRAGMA user_version = 1');
+    db.exec('PRAGMA user_version = '+SCHEMA_VERSION);
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
@@ -55,5 +55,20 @@ export function initializeWorkspace(db) {
     CREATE TABLE IF NOT EXISTS dialogue_origins (attempt_id TEXT PRIMARY KEY, origin TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS dialogue_summaries (attempt_id TEXT PRIMARY KEY, summary TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS dialogue_coaching (attempt_id TEXT PRIMARY KEY, focus TEXT NOT NULL, evidence TEXT NOT NULL, next_step TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS dialogue_requests (request_id TEXT PRIMARY KEY, attempt_id TEXT NOT NULL);`);
+    CREATE TABLE IF NOT EXISTS dialogue_requests (request_id TEXT PRIMARY KEY, attempt_id TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS attempt_ability_evaluations (
+      attempt_id TEXT PRIMARY KEY REFERENCES attempts(id) ON DELETE CASCADE,
+      evaluation TEXT NOT NULL CHECK(json_valid(evaluation))
+    );
+    CREATE TABLE IF NOT EXISTS training_tasks (
+      id TEXT PRIMARY KEY, role TEXT NOT NULL, request_id TEXT NOT NULL,
+      topic TEXT NOT NULL, point TEXT NOT NULL, topics TEXT NOT NULL CHECK(json_valid(topics)),
+      status TEXT NOT NULL CHECK(status IN ('proposed','searching','review','ready','completed','failed','cancelled')),
+      reason TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, started_at INTEGER,
+      result TEXT CHECK(result IS NULL OR json_valid(result)),
+      candidate_id TEXT, question_id TEXT, attempt_id TEXT,
+      UNIQUE(role,request_id)
+    );
+    CREATE INDEX IF NOT EXISTS training_tasks_role ON training_tasks(role,created_at);
+    CREATE INDEX IF NOT EXISTS training_tasks_question ON training_tasks(role,question_id,status);`);
 }

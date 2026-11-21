@@ -1,4 +1,6 @@
-export function mountPractice({api:send,fetchLocal,refresh,toast,escapeHtml,openSource,openTab,onAnswered,onCompleted,onAssessed}) {
+import { renderAbilityEvaluation } from './ability-evaluation.js';
+
+export function mountPractice({api:send,fetchLocal,refresh,toast,escapeHtml,openSource,openTab,onAnswered,onCompleted,onAssessed,onTraining}) {
  const $ = selector => document.querySelector(selector);
  const $$ = selector => document.querySelectorAll(selector);
  let state = {role:'',sources:[],attempts:[]};
@@ -107,13 +109,17 @@ export function mountPractice({api:send,fetchLocal,refresh,toast,escapeHtml,open
    if (button) button.disabled = false;
  }
 
- function loadPracticeQuestion(text) {
+ function loadPracticeQuestion(text,{restart=false}={}) {
+   if (restart && dialogueBusy) return false;
    const question = $('#question');
    const answer = $('#answer');
-   if (question.value !== text && answer.value.trim() && !window.confirm('切换题目会替换当前回答，确定继续吗？')) return false;
-   if (question.value !== text && typeof resetDialogue === 'function') resetDialogue();
-   if (question.value !== text) { clearPracticeHelp(); clearRecommendationChoice(); }
-   if (question.value !== text) { answer.value = ''; $('#answer-char-count').textContent = '0 字'; }
+   const replacing=question.value!==text || (restart && !!dialogue.turns.length);
+   if (replacing && answer.value.trim() && !window.confirm('切换题目会替换当前回答，确定继续吗？')) return false;
+   if (replacing && typeof resetDialogue === 'function') resetDialogue();
+   if (replacing) {
+     clearPracticeHelp(); clearRecommendationChoice();
+     answer.value = ''; $('#answer-char-count').textContent = '0 字';
+   }
     question.value = text;
     setQuestionContext(null);
    scheduleDraft();
@@ -182,8 +188,8 @@ export function mountPractice({api:send,fetchLocal,refresh,toast,escapeHtml,open
  });
 
  // Recommend a different eligible question, or let the user choose an early repeat.
- function useRecommendedQuestion(recommended) {
-   if (!loadPracticeQuestion(recommended.text)) return false;
+ function useRecommendedQuestion(recommended,options) {
+   if (!loadPracticeQuestion(recommended.text,options)) return false;
    clearRecommendationChoice();
    setQuestionContext({text:recommended.text,questionRef:recommended.question_ref || null,reason:recommended.reason,reasonDetails:recommended.reasonDetails,topics:recommended.topics,sources:recommended.sources,sourceTitle:recommended.sourceTitle,sourceUrl:recommended.sourceUrl});
    $('#answer')?.focus();
@@ -330,16 +336,17 @@ export function mountPractice({api:send,fetchLocal,refresh,toast,escapeHtml,open
      const renderTurn = (turn,index) => `
        <div class="dialogue-message"><strong>${index ? 'AI 追问' : escapeHtml(origins[dialogue.origin] || '练习题')}</strong><p>${escapeHtml(turn.question)}</p></div>
        <div class="dialogue-message dialogue-message--answer"><strong>你的回答</strong><p>${escapeHtml(turn.answer)}</p></div>
-       <div class="dialogue-message dialogue-message--feedback"><strong>AI 点评 · 仅供参考</strong><p>${escapeHtml(turn.feedback)}</p>${turn.coaching ? `<details class="coaching-details"><summary>查看点评依据与建议</summary><p class="coaching-focus"><b>本题重点</b> ${escapeHtml(turn.coaching.focus)}</p><p class="coaching-evidence"><b>回答摘录</b> “${escapeHtml(turn.coaching.evidence)}”</p><p class="coaching-next"><b>可以再练</b> ${escapeHtml(turn.coaching.next_step)}</p></details>` : '<p class="coaching-unverified">本条点评没有可核对的回答摘录。</p>'}</div>`;
+       <div class="dialogue-message dialogue-message--feedback"><strong>AI 点评 · 仅供参考</strong><p>${escapeHtml(turn.feedback)}</p>${turn.coaching ? `<details class="coaching-details"><summary>查看点评依据与建议</summary><p class="coaching-focus"><b>本题重点</b> ${escapeHtml(turn.coaching.focus)}</p><p class="coaching-evidence"><b>回答摘录</b> “${escapeHtml(turn.coaching.evidence)}”</p><p class="coaching-next"><b>可以再练</b> ${escapeHtml(turn.coaching.next_step)}</p></details>` : '<p class="coaching-unverified">本条点评没有可核对的回答摘录。</p>'}${renderAbilityEvaluation(turn.evaluation,escapeHtml)}</div>`;
      const previous = dialogue.summary ? dialogue.turns : dialogue.turns.slice(0,-1);
      if (previous.length) html += `<details class="dialogue-history"${historyOpen ? ' open' : ''}><summary>查看之前的 ${previous.length} 轮对话</summary><div class="dialogue-history-content">${previous.map(renderTurn).join('')}</div></details>`;
      if (!dialogue.summary) html += renderTurn(dialogue.turns.at(-1),dialogue.turns.length-1);
      const last = dialogue.turns[dialogue.turns.length - 1];
-     if (!dialogue.summary && last.follow_up && dialogue.turns.length < 8) html += `<div class="dialogue-message"><strong>AI 追问 · 非原帖问题</strong><p>${escapeHtml(last.follow_up)}</p></div>`;
+     if (!dialogue.summary && !dialogue.inactive && last.follow_up && dialogue.turns.length < 8) html += `<div class="dialogue-message"><strong>AI 追问 · 非原帖问题</strong><p>${escapeHtml(last.follow_up)}</p></div>`;
      if (dialogue.summary) {
        const coaching = [...dialogue.turns].reverse().find(turn=>turn.coaching)?.coaching;
        html += `<div class="dialogue-message dialogue-message--summary"><strong>本题总结 · AI 生成，仅供参考</strong><p>${escapeHtml(dialogue.summary)}</p>${coaching ? `<div class="coaching-action"><p>下一步：${escapeHtml(coaching.next_step)}</p><button type="button" class="practice-question-action" data-dialogue-reinforce ${dialogueBusy ? 'disabled' : ''}>生成一道针对性补练</button><small>会向 AI 发送本题完整对话和已确认的岗位要求；新题由 AI 生成。</small></div>` : ''}</div>`;
      }
+     if (dialogue.summary || !last.follow_up || dialogue.inactive) html += '<button type="button" class="practice-question-action" data-dialogue-training>查看下一步备战计划</button>';
      const rating = (state.attempts || []).find(item=>item.id===dialogue.turns[0].id)?.rating || 'unassessed';
      html += `<div class="review-assessment" aria-label="本题自评"><strong>这道题感觉怎么样？</strong><div class="review-actions"><button type="button" class="practice-question-action" data-dialogue-rating="revisit" aria-pressed="${rating==='revisit'}">需要再练</button><button type="button" class="practice-question-action" data-dialogue-rating="comfortable" aria-pressed="${rating==='comfortable'}">比较熟悉</button><button type="button" class="practice-question-action" data-dialogue-rating="unassessed" aria-pressed="${rating==='unassessed'}">暂不评价</button></div><span class="review-assessment-status" role="status">自评会影响题库推荐。</span></div>`;
    } else {
@@ -347,7 +354,7 @@ export function mountPractice({api:send,fetchLocal,refresh,toast,escapeHtml,open
    }
    stream.innerHTML = html;
    const last = dialogue.turns[dialogue.turns.length - 1];
-   const cannotContinue = !!dialogue.summary || (!!last && (!last.follow_up || dialogue.turns.length >= 8));
+   const cannotContinue = !!dialogue.summary || !!dialogue.inactive || (!!last && (!last.follow_up || dialogue.turns.length >= 8));
    $('#question').readOnly = dialogueBusy || (!!last && !dialogue.summary);
    $('#answer').readOnly = dialogueBusy || cannotContinue;
    $('#review-btn').disabled = dialogueBusy || cannotContinue;
@@ -355,7 +362,7 @@ export function mountPractice({api:send,fetchLocal,refresh,toast,escapeHtml,open
    const choice=$('#recommendation-choice'); if (choice && last) choice.hidden=true;
    const focus=$('#role-coaching-focus'); if (focus) focus.hidden=!!last || !state.role || !state.roleCoaching?.focus;
    const finish = $('#dialogue-finish');
-   finish.hidden = !last || !!dialogue.summary; finish.disabled = dialogueBusy;
+   finish.hidden = !last || !!dialogue.summary || !!dialogue.inactive; finish.disabled = dialogueBusy;
    $('#pick-from-lib-btn').disabled = dialogueBusy;
  }
 
@@ -379,14 +386,38 @@ export function mountPractice({api:send,fetchLocal,refresh,toast,escapeHtml,open
    try {
      const result = await api('/api/practice/dialogue/' + encodeURIComponent(id) + '?role=' + encodeURIComponent(role));
      if (dialogueRevision !== revision || state.role !== role || $('#question').value !== currentQuestion || $('#answer').value !== currentAnswer) return;
-     dialogue = {role,turns:result.turns || [],origin:result.origin || 'user',summary:result.summary || '',sourceAvailable:result.source_available,generation:null};
+     dialogue = {role,turns:result.turns || [],origin:result.origin || 'user',summary:result.summary || '',sourceAvailable:result.source_available,generation:null,
+       inactive:result.can_continue===false && !result.summary && !!result.turns?.at(-1)?.follow_up};
      if (typeof renderQuestionContext === 'function') renderQuestionContext();
      renderDialogue();
      if (dialogue.summary) dialogueStatus('已恢复本题总结。');
+     else if (dialogue.inactive) dialogueStatus('这道追问已有后续回答。可以查看练习记录或选择下一步。');
      else if (dialogue.turns.length) dialogueStatus('已恢复本题对话与当前岗位草稿。');
    } catch (err) {
      if (dialogueRevision === revision && state.role === role) dialogueStatus('之前的对话暂时无法恢复，草稿仍在：' + err.message + '。可刷新重试。', 'error');
    }
+ }
+
+ async function openFollowup({parent_attempt_id:id,question}) {
+   const role=state.role, revision=roleRevision, session=dialogueRevision;
+   if (!role || dialogueBusy || $('#save-local-practice')?.disabled) return false;
+   const result=await api('/api/practice/dialogue/'+encodeURIComponent(id)+'?role='+encodeURIComponent(role));
+   if (revision!==roleRevision || session!==dialogueRevision || dialogueBusy || $('#save-local-practice')?.disabled) return false;
+   if (!result.can_continue || result.turns?.at(-1)?.follow_up!==question) throw Error('这道追问已变化，请重新安排下一步。');
+   const sameDraft=questionContext?.parentId===id && $('#question').value===question;
+   if (!sameDraft) {
+     if ($('#answer').value.trim() && !window.confirm('继续追问会替换当前未发送的回答，确定继续吗？')) return false;
+     resetDialogue(); clearPracticeHelp(); clearRecommendationChoice();
+     $('#answer').value=''; $('#answer-char-count').textContent='0 字';
+   }
+   dialogue={role,turns:result.turns,origin:result.origin,summary:'',sourceAvailable:result.source_available,generation:null};
+   $('#question').value=question;
+   setQuestionContext({text:question,parentId:id});
+   storePractice('dialogue',{id});
+   scheduleDraft(); renderDialogue();
+   dialogueStatus('已恢复本题，可以回答追问或结束总结。');
+   $('#answer').focus();
+   return true;
  }
 
  $('#question').addEventListener('input', () => {
@@ -394,6 +425,7 @@ export function mountPractice({api:send,fetchLocal,refresh,toast,escapeHtml,open
  });
 
  $('#dialogue-stream').addEventListener('click', async e => {
+   if (e.target.closest('[data-dialogue-training]')) { onTraining?.(); return; }
    const reinforceButton=e.target.closest('[data-dialogue-reinforce]');
    if (reinforceButton) {
      if (dialogueBusy || !dialogue.summary || !dialogue.turns.length) return;
@@ -442,7 +474,7 @@ export function mountPractice({api:send,fetchLocal,refresh,toast,escapeHtml,open
    if (!role) { dialogueStatus('请先设置目标岗位。','error'); return; }
    if (!question || !answer) { dialogueStatus('请先填写问题和回答。','error'); return; }
    if (question.length > 2000 || answer.length > 10000) { dialogueStatus('问题最多 2000 字，回答最多 10000 字；请缩短后再提交。','error'); return; }
-   if (dialogue.summary || dialogue.turns.length >= 8) { dialogueStatus('本题已结束，请选择新题。','error'); return; }
+   if (dialogue.summary || dialogue.inactive || dialogue.turns.length >= 8) { dialogueStatus('本题无法继续，请查看练习记录或选择新题。','error'); return; }
    const payload = {role,question,answer,parent_attempt_id:questionContext?.parentId || '',question_ref:questionContext?.questionRef || null,generation_token:dialogue.generation?.question === question ? dialogue.generation.token : ''};
    const revision = dialogueRevision, roleAtSubmit = roleRevision;
    dialogueBusy = true; renderDialogue(); dialogueStatus('正在围绕你的回答生成点评和追问…','info');
@@ -457,8 +489,8 @@ export function mountPractice({api:send,fetchLocal,refresh,toast,escapeHtml,open
      const result = await api('/api/practice/dialogue/turn','POST',payload);
      if (dialogueRevision !== revision || roleRevision !== roleAtSubmit || state.role !== role) return;
      dialogue.role = role; dialogue.origin = dialogue.origin || result.origin || 'user';
-     dialogue.turns.push({id:result.id,question,answer,feedback:result.feedback,follow_up:result.follow_up || '',coaching:result.coaching || null});
-     if (typeof agents !== 'undefined') agents.answered(questionContext?.questionRef,dialogue.turns[0].id);
+     dialogue.turns.push({id:result.id,question,answer,feedback:result.feedback,follow_up:result.follow_up || '',coaching:result.coaching || null,evaluation:result.evaluation || null});
+     if (typeof agents !== 'undefined') agents.answered?.(questionContext?.questionRef,dialogue.turns[0].id);
      dialogue.generation = null; dialogueRequest = null;
      storePractice('generated',null); storePractice('request',null); storePractice('dialogue',{id:result.id});
      const canFollow = result.follow_up && dialogue.turns.length < 8;
@@ -554,7 +586,13 @@ export function mountPractice({api:send,fetchLocal,refresh,toast,escapeHtml,open
    const button=event.target.closest('[data-local-feedback]');
    if(!button || !window.confirm('获取点评会把这道题和这次回答完整发给已配置的 AI 服务。继续吗？')) return;
    button.disabled=true;
-   try {await api('/api/practice/local/'+encodeURIComponent(button.dataset.localFeedback)+'/feedback','POST',{role:state.role});await refresh();toast.success('点评已添加到原记录');}
+   const roleAtRequest=roleRevision;
+   try {
+     await api('/api/practice/local/'+encodeURIComponent(button.dataset.localFeedback)+'/feedback','POST',{role:state.role});
+     if (roleAtRequest!==roleRevision) return;
+     agents.answered?.();
+     await refresh();toast.success('点评已添加到原记录');
+   }
    catch(error){toast.error(error.message);button.disabled=false;}
  });
 
@@ -602,5 +640,5 @@ export function mountPractice({api:send,fetchLocal,refresh,toast,escapeHtml,open
    renderReturnPractice();
    if (changedRole) restoreDialogue(state.role,state.draft).then(maybeAutoSelectPractice).catch(() => {});
  }
- return {sync,flushDraft:writeDraft,enter:maybeAutoSelectPractice,openQuestion:useRecommendedQuestion,openSourceQuestion:practiceSourceQuestion};
+ return {sync,flushDraft:writeDraft,enter:maybeAutoSelectPractice,openQuestion:useRecommendedQuestion,openSourceQuestion:practiceSourceQuestion,openFollowup};
 }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { webcrypto } from 'node:crypto';
 import vm from 'node:vm';
+import { renderAbilityEvaluation } from '../public/ui/ability-evaluation.js';
 
 const source = await readFile(new URL('../public/ui/practice.js',import.meta.url),'utf8');
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -19,9 +20,9 @@ function harness() {
     return nodes.get(key);
   }
   const document = {querySelector:node,querySelectorAll:()=>[],createElement:()=>node(Symbol()),createTextNode:text=>text};
-  const context = vm.createContext({document,window:{confirm:()=>true,addEventListener(){}},AbortController,setTimeout,clearTimeout,
+  const context = vm.createContext({document,renderAbilityEvaluation,window:{confirm:()=>true,addEventListener(){}},AbortController,setTimeout,clearTimeout,
     TextEncoder,crypto:webcrypto,URL,sessionStorage:{getItem:key=>storage.get(key) || null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)}});
-  vm.runInContext(source.replace('export function','function'),context);
+  vm.runInContext(source.slice(source.indexOf('export function')).replace('export function','function'),context);
   const api = (path,method,data,signal) => {
     if (path === '/api/draft') { drafts.push(data); return Promise.resolve({}); }
     return new Promise((resolve,reject)=>calls.push({path,method,data,signal,resolve,reject}));
@@ -50,6 +51,26 @@ test('mounted practice controller preserves edits on refresh and writes the corr
   await harnessState.controller.flushDraft();
   assert.equal(harnessState.drafts.at(-1).role,'前端');
   assert.equal(harnessState.drafts.at(-1).question_ref,null);
+});
+
+test('accepting a Career follow-up restores the saved turn and keeps a draft for that same follow-up',async()=>{
+  const h=harness();
+  h.sync('产品','旧题','旧回答');
+  const selecting=h.controller.openFollowup({parent_attempt_id:'turn-1',question:'如何验证？'});
+  assert.match(h.calls[0].path,/\/api\/practice\/dialogue\/turn-1\?role=/);
+  h.calls[0].resolve({origin:'source',can_continue:true,summary:'',
+    turns:[{id:'turn-1',question:'原题',answer:'原回答',feedback:'点评',follow_up:'如何验证？'}]});
+  assert.equal(await selecting,true);
+  assert.match(h.node('#dialogue-stream').innerHTML,/原回答/);
+  assert.equal(h.node('#question').value,'如何验证？');
+  h.node('#answer').value='尚未发出的补充';
+  const repeat=h.controller.openFollowup({parent_attempt_id:'turn-1',question:'如何验证？'});
+  h.calls[1].resolve({origin:'source',can_continue:true,summary:'',
+    turns:[{id:'turn-1',question:'原题',answer:'原回答',feedback:'点评',follow_up:'如何验证？'}]});
+  assert.equal(await repeat,true);
+  await h.controller.flushDraft();
+  assert.equal(h.drafts.at(-1).parent_attempt_id,'turn-1');
+  assert.equal(h.drafts.at(-1).answer,'尚未发出的补充');
 });
 
 test('mounted controller cancels role-scoped requests and ignores old responses after switching away and back', async () => {

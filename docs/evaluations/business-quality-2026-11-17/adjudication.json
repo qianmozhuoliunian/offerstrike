@@ -1,0 +1,38 @@
+{
+  "method": "预设参考答案逐条复核，Codex 执行复核，无独立人工复标",
+  "interview": {
+    "01": {"feedback": true, "structure": true, "followup": true, "note": "纠正检索数量等于准确率。纠正作答后复习仍列为优先；新旧知识点名称未合并，另将 k 选择标为原题遗漏。"},
+    "02": {"feedback": true, "structure": true, "followup": true, "note": "识别超时处理正确及有副作用的重试未覆盖。"},
+    "03": {"feedback": false, "structure": false, "followup": false, "note": "认可缩放原理；补充说明把独立、零均值写成足以推出方差恰为 d_k，仍需单位方差等前提。结构化把未要求的方差推导列为遗漏，追问建立在该遗漏上。"},
+    "04": {"feedback": true, "structure": true, "followup": true, "note": "正确区分 HTTP 无状态与应用会话。纠正后两个旧错误点名称未合并，仍按旧错误建议复习。"},
+    "05": {"feedback": true, "structure": true, "followup": true, "note": "认可穿透定义及缓解，补问题干明确要求的击穿。"},
+    "06": {"feedback": true, "structure": true, "followup": null, "note": "覆盖索引的定义与例子均正确，无需追问。"},
+    "07": {"feedback": true, "structure": true, "followup": null, "note": "准确指出索引 key 重排错位，未追问。纠正回答已经给出头部插入场景，仍被列为遗漏并追问该场景。"},
+    "08": {"feedback": true, "structure": true, "followup": null, "note": "正确判断任务顺序；待验证列表仍重复了答案部分内容。"},
+    "09": {"feedback": true, "structure": true, "followup": null, "note": "识别 computed 正确和 watch 漏答，未追问；同一主题同时出现在遗漏与待验证。"},
+    "10": {"feedback": true, "structure": true, "followup": true, "note": "纠正缓存指令语义颠倒。纠正作答后仍列旧错，且把重新验证失败后的行为当成原题遗漏。"},
+    "11": {"feedback": true, "structure": true, "followup": true, "note": "正确区分状态恢复与外部 sink 的端到端保证。"},
+    "12": {"feedback": true, "structure": true, "followup": null, "note": "认可三值逻辑与 ON/WHERE 差异，无需追问。"},
+    "13": {"feedback": true, "structure": true, "followup": true, "note": "重试是题目明确要求，追问聚焦幂等。"},
+    "14": {"feedback": true, "structure": false, "followup": null, "note": "已有并发方法和一致性断言；结构化仍记两项遗漏，其中故障定位完全超出题干。"},
+    "15": {"feedback": true, "structure": true, "followup": true, "note": "正确纠正探针对流量和重启的不同影响。"},
+    "16": {"feedback": true, "structure": true, "followup": true, "note": "认可 top 为起点，追问直接定位 D 状态。"},
+    "17": {"feedback": true, "structure": false, "followup": null, "note": "join/detach 主判断正确。题目未要求析构行为，结构化仍将其标为遗漏。析构说明仅适用于仍 joinable 的对象。"},
+    "18": {"feedback": true, "structure": true, "followup": true, "note": "纠正 ANR 只能来自死锁，追问用一种阻塞情境核验。"},
+    "19": {"feedback": true, "structure": true, "followup": true, "note": "正确区分测试集隔离与折内拟合，追问 scaler 的 fit 范围。"},
+    "20": {"feedback": true, "structure": true, "followup": null, "note": "正确识别协作式取消，无需追问。"}
+  },
+  "career_improvement": {
+    "01": {"pass": false, "before": "followup", "after": "review", "reason": "旧错误继续作为 review 的主依据；新评价的检索/召回近义标签和新增误判遗漏影响结果。"},
+    "04": {"pass": false, "before": "followup", "after": "review", "reason": "纠正评价没有弱点；无状态与会话的正确点改名后，仍依据旧错误推荐原题。"},
+    "07": {"pass": false, "before": "review", "after": "followup", "reason": "纠正答卷已有重排例子，结构化却把例子判为遗漏并给出追问。"},
+    "10": {"pass": false, "before": "followup", "after": "followup", "reason": "语义已经纠正；新追问来自原题没问的重新验证失败情境。"}
+  },
+  "research": {
+    "04": {"count": 3, "topic_match": 3, "post_type": "firsthand", "target_company_match": 3, "strict_eligible": true, "note": "作者本人一面回忆，原帖标题与单公司面试叙述一致。"},
+    "06": {"count": 1, "topic_match": 1, "post_type": "reader_report", "target_company_match": null, "strict_eligible": false, "note": "JavaGuide 开篇说明是读者分享，不能确认为网页作者的自述。"},
+    "07": {"count": 1, "topic_match": 1, "post_type": "firsthand", "target_company_match": 0, "strict_eligible": false, "note": "腾讯在原帖另一小节；当前题位于远景能源小节。系统 company 字段为空，不能计为错误的结构化归属，但该题不符合腾讯过滤条件。"},
+    "08": {"count": 2, "topic_match": 2, "post_type": "firsthand", "target_company_match": null, "strict_eligible": true, "note": "作者本人参加百度前端实习面试，一面列出两道 JavaScript 题。"},
+    "17": {"count": 5, "topic_match": 5, "post_type": "reader_report_compilation", "target_company_match": null, "strict_eligible": false, "note": "网页作者明确称为整理读者的多家公司经历；题可定位，但不能按网页作者自述确认。"}
+  }
+}

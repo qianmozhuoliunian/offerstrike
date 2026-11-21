@@ -37,7 +37,7 @@ function groupQuestions(candidates, role) {
   }));
 }
 
-export function recommendFromHistory({ role, candidates, attempts, now = new Date(), excludeText = '' }) {
+export function recommendFromHistory({ role, candidates, attempts, now = new Date(), excludeText = '', deprioritizedIds = [] }) {
   const currentTime = now instanceof Date ? now.getTime() : new Date(now).getTime();
   if (!Number.isFinite(currentTime)) throw Error('推荐时间无效');
   const questions = groupQuestions(candidates, role);
@@ -74,17 +74,19 @@ export function recommendFromHistory({ role, candidates, attempts, now = new Dat
     const lastTime = latest ? timestamp(latest.created) : null;
     const age = lastTime === null ? null : Math.max(0, Math.floor((currentTime - lastTime) / DAY));
     const due = age !== null && age >= intervals[rating];
-    const rank = !latest ? 1 : rating === 'revisit' && due ? 0 : rating === 'unassessed' && due ? 2 : rating === 'comfortable' && due ? 3 : rating === 'revisit' ? 4 : rating === 'unassessed' ? 5 : 6;
+    const repeated = rating !== 'revisit' && refs.some(ref=>deprioritizedIds.includes(ref.id));
+    const rank = repeated ? 7 : !latest ? 1 : rating === 'revisit' && due ? 0 : rating === 'unassessed' && due ? 2 : rating === 'comfortable' && due ? 3 : rating === 'revisit' ? 4 : rating === 'unassessed' ? 5 : 6;
     const reason = !latest ? '尚未练习' : rating === 'revisit' ? '你标记为需要再练' : rating === 'comfortable' ? '你标记为比较熟悉' : '练习后尚未自评';
     const recent = age === null ? '最近练习时间未知' : age === 0 ? '今天练习过' : `${age} 天前练习过`;
     const legacy=records.some(a=>!a.refKind);
     const reasonDetails = !latest ? '可以先试答，尚未练习不代表不会。' : `${recent}，共练习 ${records.length} 次。${due ? '已到建议复习时间。' : age === null ? '' : `建议间隔 ${intervals[rating]} 天。`}${legacy ? '部分旧记录按文字匹配，来源未核实。' : ''}`;
     const availability = !latest ? 'new' : age === null ? 'unknown' : due ? 'due' : 'early';
-    return { question, rank, count:records.length, lastTime, index, reason, reasonDetails, availability, rating:latest ? rating : 'unassessed' };
+    return { question, rank, count:records.length, lastTime, index, reason, reasonDetails, availability, rating:latest ? rating : 'unassessed',lastAttemptId:latest?.id || null };
   });
   ranked.sort((a,b) => a.rank-b.rank || a.count-b.count || (a.lastTime ?? Infinity)-(b.lastTime ?? Infinity) || a.index-b.index);
   const current = typeof excludeText === 'string' ? excludeText.trim() : '';
   const otherReady = ranked.find(item => item.question.text !== current && ['new','due'].includes(item.availability));
   const selected=otherReady || (current ? ranked.find(item => item.question.text === current) : null) || ranked[0];
-  return { ...selected.question, reason:selected.reason, reasonDetails:selected.reasonDetails, practiceCount:selected.count, lastPracticedAt:selected.lastTime === null ? '' : new Date(selected.lastTime).toISOString(), selfAssessment:selected.rating, availability:selected.availability, sameAsCurrent:!!current && selected.question.text === current };
+  return { ...selected.question, reason:selected.reason, reasonDetails:selected.reasonDetails, practiceCount:selected.count, lastAttemptId:selected.lastAttemptId,
+    lastPracticedAt:selected.lastTime === null ? '' : new Date(selected.lastTime).toISOString(), selfAssessment:selected.rating, availability:selected.availability, sameAsCurrent:!!current && selected.question.text === current };
 }

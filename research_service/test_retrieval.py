@@ -47,6 +47,7 @@ def test_retrieval_uses_provider_credentials_and_preserves_scope(provider, phras
     {"domains": ["example.com"]}, {"role": "   "}, {"provider": "Other"}, {"phrase": "面试经历"},
     {"jd": "私人内容"}, {"from_date": "2025-12-31", "through_date": "2025-01-01"},
     {"through_date": "2099-01-01"}, {"from_date": None},
+    {"topic": "一" * 41}, {"topic": "React\n"}, {"topic": ["React"]},
 ])
 def test_rejects_invalid_or_unexpected_input_without_upstream(extra):
     def upstream(_):
@@ -58,6 +59,18 @@ def test_rejects_invalid_or_unexpected_input_without_upstream(extra):
         assert invalid.status_code == 422
         assert "私人内容" not in invalid.text
         assert client.post("/v1/retrieve", headers={"Host": "example.com"}, json=QUERY).status_code == 400
+
+
+@pytest.mark.parametrize("provider,phrase,topic", [("Tavily", "面试经历", "React"), ("Exa", "面经", "")])
+def test_deep_research_preserves_topic_and_round_phrase(provider, phrase, topic):
+    def upstream(request):
+        assert json.loads(request.content)["query"] == " ".join(filter(None, ["产品经理", "示例公司", topic, phrase]))
+        return httpx.Response(200, json={"results": []})
+
+    with TestClient(create_app(transport=httpx.MockTransport(upstream), keys={provider: "mock"}, token=TOKEN),
+                    base_url="http://127.0.0.1", headers=AUTH) as client:
+        response = client.post("/v1/retrieve", json={**QUERY, "provider": provider, "phrase": phrase, "topic": topic})
+        assert response.status_code == 200
 
 
 @pytest.mark.parametrize("mode,status", [("missing", 503), ("upstream", 502), ("format", 502), ("timeout", 504)])

@@ -3,6 +3,7 @@ import { listSources } from './questions.js';
 import { recommendFromHistory } from './recommendation.js';
 import { validateQuestionRef } from './question-identity.js';
 import { validateDate } from './core.js';
+import { matchesFocus,matchesRag,topicKey as canonicalTopic } from './knowledge-names.js';
 
 export { initializeWorkspace } from './database.js';
 
@@ -83,7 +84,9 @@ export function setInterviewDate(db, sourceId, value) {
   return {interview_date:date};
 }
 export function exportData(db) {
-  return {version:1, exported_at:new Date().toISOString(), settings:db.prepare("SELECT key,value FROM settings WHERE key='role'").all(), profiles:db.prepare('SELECT role,jd,confirmed_requirements FROM job_profiles').all(), sources:listSources(db), attempts:db.prepare('SELECT * FROM attempts ORDER BY created DESC').all(), drafts:db.prepare('SELECT role,question,answer,updated FROM drafts').all(), debriefs:db.prepare("SELECT d.*,COALESCE(t.topic,'') AS topic FROM debriefs d LEFT JOIN question_topics t ON t.kind='debrief' AND t.question_id=d.id ORDER BY d.created DESC").all(), assessments:db.prepare('SELECT attempt_id,rating FROM attempt_assessments').all(), attempt_details:db.prepare('SELECT * FROM attempt_details').all(), draft_contexts:db.prepare('SELECT * FROM draft_contexts').all(), attempt_question_links:db.prepare('SELECT * FROM attempt_question_links').all(), draft_question_links:db.prepare('SELECT * FROM draft_question_links').all(), dialogue_origins:db.prepare('SELECT * FROM dialogue_origins').all(), dialogue_summaries:db.prepare('SELECT * FROM dialogue_summaries').all(), dialogue_coaching:db.prepare('SELECT * FROM dialogue_coaching').all(), dialogue_requests:db.prepare('SELECT * FROM dialogue_requests').all()};
+  const ability_evaluations=db.prepare('SELECT attempt_id,evaluation FROM attempt_ability_evaluations ORDER BY attempt_id').all()
+    .map(({attempt_id,evaluation})=>({attempt_id,evaluation:JSON.parse(evaluation)}));
+  return {version:1, exported_at:new Date().toISOString(), settings:db.prepare("SELECT key,value FROM settings WHERE key='role'").all(), profiles:db.prepare('SELECT role,jd,confirmed_requirements FROM job_profiles').all(), sources:listSources(db), attempts:db.prepare('SELECT * FROM attempts ORDER BY created DESC').all(), drafts:db.prepare('SELECT role,question,answer,updated FROM drafts').all(), debriefs:db.prepare("SELECT d.*,COALESCE(t.topic,'') AS topic FROM debriefs d LEFT JOIN question_topics t ON t.kind='debrief' AND t.question_id=d.id ORDER BY d.created DESC").all(), assessments:db.prepare('SELECT attempt_id,rating FROM attempt_assessments').all(), attempt_details:db.prepare('SELECT * FROM attempt_details').all(), draft_contexts:db.prepare('SELECT * FROM draft_contexts').all(), attempt_question_links:db.prepare('SELECT * FROM attempt_question_links').all(), draft_question_links:db.prepare('SELECT * FROM draft_question_links').all(), dialogue_origins:db.prepare('SELECT * FROM dialogue_origins').all(), dialogue_summaries:db.prepare('SELECT * FROM dialogue_summaries').all(), dialogue_coaching:db.prepare('SELECT * FROM dialogue_coaching').all(), dialogue_requests:db.prepare('SELECT * FROM dialogue_requests').all(), ability_evaluations};
 }
 
 export function setAssessment(db, id, rating) {
@@ -94,16 +97,22 @@ export function setAssessment(db, id, rating) {
   return {rating};
 }
 
-export function recommendQuestion(db, role, excludeText = '', sourcePreference = '', {topic='',excludeIds=[]} = {}) {
+export function recommendQuestion(db, role, excludeText = '', sourcePreference = '', {
+  topic='',excludeIds=[],questionRef=null,deprioritizedIds=[],maxLength=Infinity,focus=''
+} = {}) {
   role = validRole(role);
   if (!['','self_reported'].includes(sourcePreference)) throw Error('题目来源筛选无效');
   const sources=listSources(db).filter(s=>s.role===role && (sourcePreference !== 'self_reported' || s.type === '真实面经（自述）')).flatMap(s=>s.questions.map(q=>({role,text:q.text,question_ref:{kind:'source',id:q.id},questionCreated:q.created,topic:q.topic,sourceId:s.id,sourceTitle:s.title,sourceUrl:s.url,sourceDate:s.date,sourceType:s.type,interviewDate:s.interview_date})));
   const personal=sourcePreference === 'self_reported' ? [] : db.prepare("SELECT d.id,d.question,d.created,COALESCE(t.topic,'') AS topic FROM debriefs d LEFT JOIN question_topics t ON t.kind='debrief' AND t.question_id=d.id WHERE d.role=? AND d.include_in_library=1").all(role).map(d=>({role,text:d.question,question_ref:{kind:'debrief',id:d.id},questionCreated:d.created,topic:d.topic,sourceId:'debrief:'+d.id,sourceTitle:'个人面试记录',sourceType:'个人面试记录'}));
   const attempts=db.prepare('SELECT a.id,a.role,a.question,a.created,aa.rating,l.kind AS refKind,l.question_id AS refId FROM attempts a LEFT JOIN attempt_assessments aa ON aa.attempt_id=a.id LEFT JOIN attempt_question_links l ON l.attempt_id=a.id WHERE a.role=?').all(role);
   const canonical = text=>String(text || '').normalize('NFKC').trim().toLowerCase();
+  const topicKey=canonicalTopic(topic);
+  const topicWord=/^[a-z0-9]+$/u.test(topicKey) ? new RegExp(`(?<![a-z0-9])${topicKey}(?![a-z0-9])`,'u') : null;
   const pool = [...sources,...personal];
   const excludedText = new Set(pool.filter(item=>excludeIds.includes(item.question_ref.id)).map(item=>canonical(item.text)));
-  const candidates = pool.filter(item=>!excludedText.has(canonical(item.text)) &&
-    (!topic || canonical(item.topic)===canonical(topic) || canonical(item.text).includes(canonical(topic))));
-  return recommendFromHistory({role,candidates,attempts,excludeText});
+  const candidates = pool.filter(item=>item.text.trim().length<=maxLength && !excludedText.has(canonical(item.text)) &&
+    (!questionRef || (item.question_ref.kind===questionRef.kind && item.question_ref.id===questionRef.id)) &&
+    matchesFocus(focus,item.text) && (!topicKey || canonicalTopic(item.topic)===topicKey ||
+      (topicKey==='rag' ? matchesRag(item.text) : topicWord ? topicWord.test(canonical(item.text)) : canonical(item.text).includes(topicKey))));
+  return recommendFromHistory({role,candidates,attempts,excludeText,deprioritizedIds});
 }

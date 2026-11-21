@@ -18,6 +18,7 @@ Domain = Literal["nowcoder.com", "juejin.cn", "zhihu.com", "csdn.net",
                  "cnblogs.com", "51cto.com", "segmentfault.com"]
 Role = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 Company = Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)]
+Topic = Annotated[str, StringConstraints(max_length=40, pattern=r"^[^\x00-\x1f]*$")]
 
 
 class SearchRequest(BaseModel):
@@ -27,6 +28,7 @@ class SearchRequest(BaseModel):
     company: Company = ""
     domains: Annotated[list[Domain], Field(min_length=1, max_length=7)]
     phrase: Literal["面经", "面试经验", "面试经历"]
+    topic: Topic | None = None
     from_date: date | None = None
     through_date: date | None = None
 
@@ -34,7 +36,7 @@ class SearchRequest(BaseModel):
     def check_scope(self):
         if len(set(self.domains)) != len(self.domains):
             raise ValueError("请选择有效且不重复的来源")
-        if (self.provider == "Exa") != (self.phrase == "面试经历"):
+        if self.topic is None and (self.provider == "Exa") != (self.phrase == "面试经历"):
             raise ValueError("检索方式与搜索服务不匹配")
         if (self.from_date is None) != (self.through_date is None) or (
             self.from_date and self.through_date and self.from_date > self.through_date
@@ -102,7 +104,7 @@ def create_app(*, transport=None, keys=None, token=None):
         if query.through_date and query.through_date > today:
             raise HTTPException(422, "时间范围不能超过今天")
 
-        text = " ".join(filter(None, (query.role, query.company, query.phrase)))
+        text = " ".join(filter(None, (query.role, query.company, (query.topic or "").strip(), query.phrase)))
         if query.provider == "Exa":
             url, headers = "https://api.exa.ai/search", {"x-api-key": key}
             payload = dict(query=text, type="auto", numResults=10, includeDomains=query.domains,

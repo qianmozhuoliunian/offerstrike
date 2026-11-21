@@ -6,11 +6,16 @@ directories:
   output: dist/windows
 files:
   - desktop/**
-  - public/**
-  - src/**
-  - server.js
+  - public/assets/offerstrike-icon.png
+  - src/ai-transport.js
   - package.json
   - LICENSE
+  - THIRD_PARTY_NOTICES.md
+extraResources:
+  - from: dist/python/OfferStrikeBackend
+    to: backend
+    filter:
+      - '**/*'
 win:
   icon: public/assets/offerstrike.ico
   signExecutable: false

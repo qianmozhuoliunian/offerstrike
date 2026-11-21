@@ -4,10 +4,10 @@
 
 ## 开发
 
-1. 使用 Node.js 22.13+，运行 `npm ci`。
+1. 使用 Node.js 22.13+、Python 3.10+，运行 `npm ci`，创建 `.venv` 后安装 `backend/requirements-dev.txt`。
 2. 运行 `npm start`，使用终端给出的完整本机链接。开发和测试请用虚构数据。
 3. 修改前阅读 [AGENTS.md](AGENTS.md) 和相关实现；核心流程改动先按 [规格模板](docs/specs/TEMPLATE.md) 写验收标准。
-4. 运行 `npm run check`。涉及可选 Python 服务时另运行其 [测试](research_service/README.md)。
+4. 运行 `npm run check`、`npm run fastapi:test`。界面改动运行 `npm run vue:build` 和 `npm run vue:test-ui`；桌面改动运行 `npm run desktop:test`。涉及旧可选 Python 服务时另运行其 [测试](research_service/README.md)。
 5. 提交 PR 说明问题、变化、验证结果和未验证范围。涉及界面时提供不含个人信息的截图。
 
 测试应使用隔离数据库和模拟服务，不能依赖真实密钥。保存、导入与导出改动需要兼容旧备份。

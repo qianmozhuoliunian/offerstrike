@@ -31,10 +31,19 @@ function containsKeyword(title, keyword) {
   return title.includes(keyword);
 }
 
-export function filterSearchRelevance(role, results, {company = ''} = {}) {
+export function searchRoleMatcher(role) {
   const roleText = normalize(role);
-  const companyText = normalize(company);
   const keywords = roleKeywords(role);
+  return text => {
+    const normalized = normalize(text);
+    return Boolean((roleText && containsKeyword(normalized, roleText)) ||
+      keywords.some(keyword => containsKeyword(normalized, keyword)));
+  };
+}
+
+export function filterSearchRelevance(role, results, {company = ''} = {}) {
+  const matchesRole = searchRoleMatcher(role);
+  const companyText = normalize(company);
   const isFrontend = frontend.test(role) && !/全栈|full[ -]?stack/i.test(role);
   const kept = [], unverified = [];
   let filtered = 0;
@@ -42,7 +51,7 @@ export function filterSearchRelevance(role, results, {company = ''} = {}) {
     const originalTitle = String(result.title || '');
     if (isFrontend && !frontend.test(originalTitle) && backend.test(originalTitle)) { filtered++; continue; }
     const title = normalize(originalTitle);
-    const roleInTitle = (roleText && containsKeyword(title, roleText)) || keywords.some(keyword => containsKeyword(title, keyword));
+    const roleInTitle = matchesRole(originalTitle);
     // Provider snippets can include comments or recommendations. Company names
     // there alone do not establish that the author interviewed at that company.
     const companyInTitle = !companyText || containsKeyword(title, companyText);

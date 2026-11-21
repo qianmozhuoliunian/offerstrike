@@ -23,6 +23,12 @@ test('dialogue keeps full context, validates origins, retries safely and restore
     else {
       const data=JSON.parse(content);
       value={focus:'判断依据',evidence:data.answer.slice(0,100),next_step:'练习验证方法',feedback:'你的回答提出了判断依据。',follow_up:data.answer.startsWith('__round') || data.answer.startsWith('__large') ? '继续说明？' : data.previous_turns.length ? '' : '你会如何验证？'};
+      if (data.answer==='先确定业务目标') value.evaluation={topic:'指标',
+        strengths:[{point:'先明确业务目标',evidence:'先确定业务目标'}],
+        weaknesses:[{point:'补充指标分析的验证方式',evidence:'先确定业务目标',type:'missing',requirement:'分析指标'}],
+        unverified:['如何识别异常值'],followup_point:'补充指标分析的验证方式',suggested_followup:'你会如何验证？',recommended_action:'followup'};
+      if (data.answer==='对照业务数据') value.evaluation={topic:'',strengths:[{point:'对照已有数据',evidence:'对照业务数据'}],
+        weaknesses:[],unverified:[],followup_point:'',recommended_action:'complete'};
     }
     res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({choices:[{message:{content:JSON.stringify(value)}}]}));
   });
@@ -58,6 +64,8 @@ test('dialogue keeps full context, validates origins, retries safely and restore
     const [a,b]=await Promise.all([post('/api/practice/dialogue/turn',input),post('/api/practice/dialogue/turn',input)]);
     assert.equal(a.status,200);assert.equal(b.status,200);
     const first=await a.json(), duplicate=await b.json(); assert.equal(first.id,duplicate.id);assert.equal(first.origin,'source');
+    assert.deepEqual(first.evaluation,duplicate.evaluation);
+    assert.equal(first.evaluation.strengths[0].evidence,input.answer);
     assert.equal(requests.filter(r=>r.system.includes('围绕同一道题逐轮对话')).length,1);
     assert.equal((await post('/api/practice/dialogue/turn',{...input,answer:'不同回答'})).status,400);
     assert.equal((await post('/api/practice/dialogue/turn',{...input,question_ref:null})).status,400);
@@ -70,6 +78,7 @@ test('dialogue keeps full context, validates origins, retries safely and restore
     assert.equal(secondRes.status,200); const second=await secondRes.json();
     const turnInput=JSON.parse(requests.at(-1).content);
     assert.equal(turnInput.previous_turns[0].answer,'先确定业务目标');
+    assert.equal(Object.hasOwn(turnInput.previous_turns[0],'evaluation'),false);
     assert.equal(turnInput.requirements,'分析指标');
     assert.doesNotMatch(requests.at(-1).content,/不应传给对话的描述/);
     const summary=await post('/api/practice/dialogue/summary',{role:'产品经理',attempt_id:second.id});assert.equal(summary.status,200);
@@ -78,6 +87,14 @@ test('dialogue keeps full context, validates origins, retries safely and restore
     assert.equal((await post('/api/practice/dialogue/summary',{role:'产品经理',attempt_id:second.id})).status,200);assert.equal(requests.length,lastRequestCount);
     const history=await (await fetchWorkbench(base+`/api/practice/dialogue/${second.id}?role=${encodeURIComponent('产品经理')}`)).json();
     assert.equal(history.turns.length,2);assert.equal(history.origin,'source');assert.equal(history.summary,summaryText);
+    assert.deepEqual(history.turns[0].evaluation,first.evaluation);
+    const abilityResponse=await fetchWorkbench(base+'/api/career/ability-history?role='+encodeURIComponent('产品经理'));
+    assert.equal(abilityResponse.status,200);
+    const ability=await abilityResponse.json();
+    assert.deepEqual(ability.history[0].question_ref,ref);
+    assert.equal(ability.history[0].topic,'指标');
+    assert.deepEqual(ability.topics.map(({topic,rounds})=>({topic,rounds})),[{topic:'指标',rounds:2}]);
+    assert.equal(ability.next_steps[0].topic,'指标');
     const ai=await post('/api/practice/dialogue/turn',{role:'产品经理',question:generated.question,answer:'先看影响',generation_token:generated.generation_token,request_id:'generated-1'});
     assert.equal(ai.status,200);const aiTurn=await ai.json();assert.equal(aiTurn.origin,'ai');
     const aiRetry=await post('/api/practice/dialogue/turn',{role:'产品经理',question:generated.question,answer:'先看影响',generation_token:generated.generation_token,request_id:'generated-1'});
@@ -105,11 +122,13 @@ test('dialogue keeps full context, validates origins, retries safely and restore
     assert.equal((await restored.post('/api/import',{mode:'merge',data:backup})).status,200);
     const restoredHistory=await (await restored.fetchWorkbench(restored.base+`/api/practice/dialogue/${second.id}?role=${encodeURIComponent('产品经理')}`)).json();
     assert.equal(restoredHistory.summary,summaryText);assert.equal(restoredHistory.origin,'source');assert.equal(restoredHistory.source_available,true);assert.equal(restoredHistory.turns.length,2);
+    assert.deepEqual(restoredHistory.turns[0].evaluation,first.evaluation);
     const restoredAi=await (await restored.fetchWorkbench(restored.base+`/api/practice/dialogue/${aiTurn.id}?role=${encodeURIComponent('产品经理')}`)).json();
     assert.equal(restoredAi.origin,'ai');
     const forged=structuredClone(backup);forged.dialogue_origins.find(item=>item.attempt_id===aiTurn.id).origin='source';
     assert.equal((await restored.post('/api/import',{mode:'preview',data:forged})).status,400);
     const legacy={...backup};delete legacy.dialogue_origins;delete legacy.dialogue_summaries;delete legacy.dialogue_requests;
+    delete legacy.ability_evaluations;
     assert.equal((await restored.post('/api/import',{mode:'preview',data:legacy})).status,200);
     assert.equal((await restored.fetchWorkbench(restored.base+`/api/sources/${source.id}`,{method:'DELETE'})).status,200);
     const missing=await (await restored.fetchWorkbench(restored.base+`/api/practice/dialogue/${second.id}?role=${encodeURIComponent('产品经理')}`)).json();

@@ -1,0 +1,22 @@
+{
+  "method": "逐篇读取原文，按第五阶段的作者自述、题目摘录、岗位主题和公司范围标准复核。未独立双人复标。",
+  "sources": {
+    "https://www.cnblogs.com/jianrenfang/p/8697397.html": {"trusted": true, "reason": "作者本人一面回忆，今日头条公司及后端岗位明确，三道HTTP题均可定位"},
+    "https://www.cnblogs.com/javaguide/p/17041467.html": {"trusted": false, "reason": "正文说明是读者分享，不能当作网页作者的亲历自述"},
+    "https://www.cnblogs.com/huansky/p/5973655.html": {"trusted_when_company_empty": true, "trusted_when_company_tencent": false, "reason": "React候选位于远景能源章节，腾讯查询范围不符。独立CSS样本未指定公司，作者亲历及题目可定位"},
+    "https://www.cnblogs.com/linjingyg/p/15669524.html": {"trusted": false, "reason": "正文说明为读者经历整理"},
+    "https://www.cnblogs.com/autodriver/p/19922776": {"trusted": false, "reason": "按企业分类列举考题，无明确本人参加该面试的叙述"},
+    "https://www.cnblogs.com/yangykaifa/p/19340193": {"trusted": false, "reason": "题目和答案目录整理，模型曾用答案段落充当问题证据"},
+    "https://www.cnblogs.com/gslgb/p/15057376.html": {"trusted": true, "reason": "电话面试日期、个人回答与总结清楚，线程池问题可定位"},
+    "https://www.cnblogs.com/javaguide/p/18112799": {"trusted": false, "reason": "正文明确为一位同学分享的面经"}
+  },
+  "counts": {
+    "historical_20": {"candidates": 12, "trusted": 5},
+    "before_20": {"candidates": 10, "trusted": 3},
+    "trial_after_20": {"candidates": 7, "trusted": 3},
+    "final_after_20": {"candidates": 7, "trusted": 0, "note": "04组正文9秒超时。重试单列，不替换本轮成绩"},
+    "hold_before_4": {"candidates": 2, "trusted": 2},
+    "trial_hold_after_4": {"candidates": 2, "trusted": 1},
+    "final_hold_after_4": {"candidates": 2, "trusted": 2}
+  }
+}

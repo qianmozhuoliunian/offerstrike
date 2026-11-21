@@ -1,0 +1,61 @@
+{
+  "before": {
+    "tasks": 20,
+    "readCases": 6,
+    "reads": 8,
+    "candidates": 10,
+    "search": 36,
+    "readFailures": 0
+  },
+  "beforeReasons": {
+    "evidence": 4,
+    "role_unverified": 78,
+    "unsupported_url": 308,
+    "article_type_unknown": 7,
+    "article_type_compilation": 24,
+    "company_unverified": 8,
+    "search_date_missing": 53,
+    "no_questions": 8,
+    "not_read": 5
+  },
+  "after": {
+    "tasks": 20,
+    "readCases": 6,
+    "reads": 8,
+    "candidates": 7,
+    "search": 36,
+    "readFailures": 0
+  },
+  "hold-before": {
+    "tasks": 4,
+    "readCases": 3,
+    "reads": 4,
+    "candidates": 2,
+    "search": 6,
+    "readFailures": 0
+  },
+  "hold-after": {
+    "tasks": 4,
+    "readCases": 3,
+    "reads": 4,
+    "candidates": 2,
+    "search": 6,
+    "readFailures": 0
+  },
+  "after-final": {
+    "tasks": 20,
+    "readCases": 6,
+    "reads": 8,
+    "candidates": 7,
+    "search": 37,
+    "readFailures": 1
+  },
+  "hold-final": {
+    "tasks": 4,
+    "readCases": 3,
+    "reads": 4,
+    "candidates": 2,
+    "search": 6,
+    "readFailures": 0
+  }
+}

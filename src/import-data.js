@@ -1,6 +1,7 @@
 import { validateSource, validateDate } from './core.js';
 import { randomUUID } from 'node:crypto';
 import { validateStoredCoaching } from './coaching.js';
+import { validateAbilityEvaluation } from './ability-evaluation.js';
 
 // Existing records win on conflicts; validation happens before any writes.
 export function importData(db, data, commit = false) {
@@ -12,7 +13,7 @@ export function importData(db, data, commit = false) {
   if (data.draft_contexts !== undefined && (!Array.isArray(data.draft_contexts) || data.draft_contexts.length > 20000)) throw Error('备份中的追问草稿无效');
   if (data.attempt_question_links !== undefined && (!Array.isArray(data.attempt_question_links) || data.attempt_question_links.length > 20000)) throw Error('备份中的题目关联无效');
   if (data.draft_question_links !== undefined && (!Array.isArray(data.draft_question_links) || data.draft_question_links.length > 20000)) throw Error('备份中的草稿关联无效');
-  for (const name of ['dialogue_origins','dialogue_summaries','dialogue_coaching','dialogue_requests']) if (data[name] !== undefined && (!Array.isArray(data[name]) || data[name].length > 20000)) throw Error(`备份中的 ${name} 无效`);
+  for (const name of ['dialogue_origins','dialogue_summaries','dialogue_coaching','dialogue_requests','ability_evaluations']) if (data[name] !== undefined && (!Array.isArray(data[name]) || data[name].length > 20000)) throw Error(`备份中的 ${name} 无效`);
   const text=(v,max,field,required=false) => {
     if (typeof v !== 'string' || v.length>max || (required && !v.trim())) throw Error(`备份中的${field}无效`);
     return v;
@@ -166,6 +167,20 @@ export function importData(db, data, commit = false) {
     record(item); const requestId=id(item.request_id), attemptId=id(item.attempt_id); unique('dialogue_request',requestId);
     if (!attemptsById.has(attemptId) || !detailsByAttempt.has(attemptId)) throw Error('对话请求缺少练习记录');
     add(!acceptedAttempts.has(attemptId) || !!db.prepare('SELECT 1 FROM dialogue_requests WHERE request_id=?').get(requestId),'INSERT INTO dialogue_requests VALUES (?,?)',[requestId,attemptId]);
+  }
+  for (const item of (data.ability_evaluations || [])) {
+    record(item);const attemptId=id(item.attempt_id);unique('ability_evaluation',attemptId);
+    const attempt=attemptsById.get(attemptId);
+    if (!attempt) throw Error('能力评价缺少练习记录');
+    let evaluation;
+    try { evaluation=validateAbilityEvaluation(item.evaluation,attempt.question,attempt.answer); }
+    catch { throw Error('备份中的能力评价格式无效或证据不匹配'); }
+    const followup=detailsByAttempt.get(attemptId)?.follow_up || '';
+    if (evaluation.suggested_followup!==followup) throw Error('备份中的能力评价与追问不匹配');
+    const existingDetail=db.prepare('SELECT follow_up FROM attempt_details WHERE attempt_id=?').get(attemptId);
+    const collision=existingDetail && existingDetail.follow_up!==followup;
+    add(!acceptedAttempts.has(attemptId) || !!collision || !!db.prepare('SELECT 1 FROM attempt_ability_evaluations WHERE attempt_id=?').get(attemptId),
+      'INSERT INTO attempt_ability_evaluations VALUES (?,?)',[attemptId,JSON.stringify(evaluation)]);
   }
   if(commit) {
     db.exec('BEGIN');

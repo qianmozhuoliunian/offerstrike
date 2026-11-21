@@ -19,6 +19,7 @@ import { validateSourceText, isVerifiableEvidence, parseSourceCandidates } from 
 import { createInterviewResearch } from './src/interview-research.js';
 import { createFastApiRetrieval } from './src/fastapi-retrieval.js';
 import { createResearch, parseCostBudget } from './src/research/index.js';
+import { parsePilotUrls } from './src/research/pilot.js';
 import { createResearchModel } from './src/research/model.js';
 import { createAiTransport } from './src/ai-transport.js';
 import { createAgentWorkflow } from './src/agent-workflow.js';
@@ -56,10 +57,12 @@ const currentRole = () => db.prepare("SELECT value FROM settings WHERE key='role
 let requestAi;
 try {requestAi=createAiTransport({key:process.env.AI_API_KEY,model:process.env.AI_MODEL,baseUrl:process.env.AI_BASE_URL});}
 catch (error) {console.error(error.message);}
+const retrieve = process.env.RESEARCH_SERVICE_URL
+  ? createFastApiRetrieval(process.env.RESEARCH_SERVICE_URL, process.env.RESEARCH_SERVICE_TOKEN) : undefined;
 const research = createInterviewResearch({
   tavilyKey:process.env.TAVILY_API_KEY,
   exaKey:process.env.EXA_API_KEY,
-  retrieve:process.env.RESEARCH_SERVICE_URL ? createFastApiRetrieval(process.env.RESEARCH_SERVICE_URL, process.env.RESEARCH_SERVICE_TOKEN) : undefined,
+  retrieve,
   requestAi:requestAi ? async ({messages,response_format,signal}) => {
     const response=await requestAi({response_format,messages,temperature:0},signal);
     if(!response.ok) throw Error('AI 相关性判断暂不可用');
@@ -69,6 +72,7 @@ const research = createInterviewResearch({
 const roleConfirmations = new Map();
 const agentExtract = createResearchModel({request:requestAi});
 const deepResearch = createResearch({keys:{Tavily:process.env.TAVILY_API_KEY,Exa:process.env.EXA_API_KEY},extract:agentExtract,
+  retrieve,pilotUrls:parsePilotUrls(process.env.RESEARCH_PILOT_URLS),
   costBudget:parseCostBudget(process.env.RESEARCH_COST_BUDGET)});
 const agentWorkflow = createAgentWorkflow({db,currentRole,research:deepResearch,extract:agentExtract,
   log:process.env.RESEARCH_LOG==='1' ? record=>console.log(JSON.stringify(record)) : undefined});
@@ -84,6 +88,11 @@ async function assessRole(role) {
   } catch { return 'uncertain'; }
 }
 async function api(req,res,path) {
+  if (req.method==='GET' && ['/api/career/ability-history','/api/training/tasks'].includes(path)) {
+    const query=new URL(req.url,'http://localhost').searchParams;
+    const result=await agentWorkflow(path,{role:query.get('role'),id:query.get('id')});
+    return json(res,200,result.body);
+  }
   if (isPracticeRequest(path,req.method)) {
     const controller=new AbortController();
     res.once('close',()=>controller.abort());
@@ -92,14 +101,15 @@ async function api(req,res,path) {
     if (!res.destroyed) return json(res,result.status,result.body);
     return;
   }
-  if (req.method==='POST' && ['/api/research','/api/research/confirm','/api/career/plan','/api/career/resume'].includes(path)) {
+  if (req.method==='POST' && ['/api/research','/api/research/confirm','/api/career/plan','/api/career/resume',
+    '/api/training/tasks/create','/api/training/tasks/cancel'].includes(path)) {
     const controller=new AbortController();
     res.once('close',()=>controller.abort());
     const result=await agentWorkflow(path,await body(req,45000),controller.signal);
     if (!res.destroyed) return json(res,result.status || 200,result.body);
     return;
   }
-  if(path==='/api/state' && req.method==='GET') { const role=currentRole(); return json(res,200,{role,practiceScope:role ? practiceScope(role) : '',roleCoaching:roleCoaching(role),roleValidation:roleValidationStatus(db,role),...getProfile(db,role),draft:getDraft(db,role),debriefs:db.prepare("SELECT d.*, COALESCE(t.topic,'') AS topic FROM debriefs d LEFT JOIN question_topics t ON t.kind='debrief' AND t.question_id=d.id ORDER BY d.created DESC").all(),sources:listSources(db), attempts:db.prepare("SELECT a.*, aa.rating, l.kind AS question_link_kind, l.question_id AS question_link_id, CASE WHEN l.kind='source' THEN EXISTS(SELECT 1 FROM questions q JOIN sources s ON s.id=q.source_id WHERE q.id=l.question_id AND s.role=a.role) WHEN l.kind='debrief' THEN EXISTS(SELECT 1 FROM debriefs d WHERE d.id=l.question_id AND d.role=a.role) WHEN l.kind IN ('missing_source','missing_debrief') THEN 0 ELSE NULL END AS question_link_available FROM attempts a LEFT JOIN attempt_assessments aa ON aa.attempt_id=a.id LEFT JOIN attempt_question_links l ON l.attempt_id=a.id ORDER BY a.created DESC LIMIT 30").all(),searchConfigured:research.providers.length>0,searchProviders:research.providers,aiConfigured:!!requestAi}); }
+  if(path==='/api/state' && req.method==='GET') { const role=currentRole(); return json(res,200,{role,practiceScope:role ? practiceScope(role) : '',roleCoaching:roleCoaching(role),roleValidation:roleValidationStatus(db,role),...getProfile(db,role),draft:getDraft(db,role),debriefs:db.prepare("SELECT d.*, COALESCE(t.topic,'') AS topic FROM debriefs d LEFT JOIN question_topics t ON t.kind='debrief' AND t.question_id=d.id ORDER BY d.created DESC").all(),sources:listSources(db), attempts:db.prepare("SELECT a.*, e.evaluation AS evaluation_json, aa.rating, l.kind AS question_link_kind, l.question_id AS question_link_id, CASE WHEN l.kind='source' THEN EXISTS(SELECT 1 FROM questions q JOIN sources s ON s.id=q.source_id WHERE q.id=l.question_id AND s.role=a.role) WHEN l.kind='debrief' THEN EXISTS(SELECT 1 FROM debriefs d WHERE d.id=l.question_id AND d.role=a.role) WHEN l.kind IN ('missing_source','missing_debrief') THEN 0 ELSE NULL END AS question_link_available FROM attempts a LEFT JOIN attempt_assessments aa ON aa.attempt_id=a.id LEFT JOIN attempt_question_links l ON l.attempt_id=a.id LEFT JOIN attempt_ability_evaluations e ON e.attempt_id=a.id ORDER BY a.created DESC LIMIT 30").all().map(({evaluation_json,...a})=>({...a,evaluation:evaluation_json?JSON.parse(evaluation_json):null})),searchConfigured:research.providers.length>0,searchProviders:research.providers,aiConfigured:!!requestAi}); }
   if(path==='/api/role' && req.method==='POST') {
     const x=await body(req), revision=++roleRequestRevision, role=validateRoleInput(x.role), previousRole=currentRole();
     for (const [token, item] of roleConfirmations) if (item.expires < Date.now()) roleConfirmations.delete(token);
@@ -219,6 +229,7 @@ const files = {
   '/ui/agent-workflow.js': [new URL('./public/ui/agent-workflow.js', import.meta.url), 'text/javascript'],
   '/ui/desktop-controls.js': [new URL('./public/ui/desktop-controls.js', import.meta.url), 'text/javascript'],
   '/ui/practice.js': [new URL('./public/ui/practice.js', import.meta.url), 'text/javascript'],
+  '/ui/ability-evaluation.js': [new URL('./public/ui/ability-evaluation.js', import.meta.url), 'text/javascript'],
   '/ui/getting-started.js': [new URL('./public/ui/getting-started.js', import.meta.url), 'text/javascript'],
   '/assets/interview-study-illustration.png': [new URL('./public/assets/interview-study-illustration.png', import.meta.url), 'image/png'],
   '/assets/offerstrike-icon.png': [new URL('./public/assets/offerstrike-icon.png', import.meta.url), 'image/png'],

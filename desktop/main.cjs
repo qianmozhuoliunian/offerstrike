@@ -1,4 +1,6 @@
-const {app,BrowserWindow,dialog,ipcMain,safeStorage,session,shell,utilityProcess}=require('electron');
+const {app,BrowserWindow,dialog,ipcMain,safeStorage,session,shell}=require('electron');
+const {spawn}=require('node:child_process');
+const net=require('node:net');
 const {randomBytes}=require('node:crypto');
 const {mkdir,readFile,writeFile,rename}=require('node:fs/promises');
 const {mkdirSync}=require('node:fs');
@@ -22,19 +24,32 @@ async function readConfig(){
   const decrypted=await safeStorage.decryptStringAsync(encrypted);
   return JSON.parse(decrypted.result);
 }
-function launchBackend(token) {
+async function launchBackend(token) {
   const env={...process.env};
   for(const key of [...keys,'RESEARCH_SERVICE_URL','RESEARCH_SERVICE_TOKEN','RESEARCH_COST_BUDGET','RESEARCH_LOG','NODE_OPTIONS']) delete env[key];
   Object.assign(env,config,{INTERVIEW_DATA_DIR:home(),INTERVIEW_DESKTOP_TOKEN:token});
-  const worker=utilityProcess.fork(path.join(__dirname,'..','server.js'),[],{env,stdio:'ignore'});
+  const listener=net.createServer();
+  await new Promise((resolve,reject)=>{listener.once('error',reject);listener.listen(0,'127.0.0.1',resolve);});
+  const port=listener.address().port;
+  await new Promise(resolve=>listener.close(resolve));
+  const root=path.join(__dirname,'..');
+  const executable=app.isPackaged ? path.join(process.resourcesPath,'backend','OfferStrikeBackend.exe') : path.join(root,'.venv',process.platform==='win32'?'Scripts/python.exe':'bin/python');
+  const args=[...(app.isPackaged?[]:['-u','-m','backend.run']),'--port',String(port)];
+  const worker=spawn(executable,args,{env,cwd:app.isPackaged?process.resourcesPath:root,windowsHide:true,stdio:['ignore','pipe','pipe']});
   child=worker;
   return new Promise((resolve,reject)=>{
     let ready=false;
-    const timer=setTimeout(()=>{worker.kill();reject(Error('本机服务启动超时'));},12000);
-    worker.once('message',({url})=>{
-      if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(url)) { clearTimeout(timer);worker.kill();reject(Error('本机服务未返回有效地址'));return; }
+    const timer=setTimeout(()=>{worker.kill();reject(Error('本机服务启动超时'));},20000);
+    worker.once('error',()=>{clearTimeout(timer);reject(Error('无法启动 Python 服务，请检查运行环境或重新安装工作台'));});
+    let output='';
+    worker.stdout.on('data',chunk=>{
+      output=(output+chunk.toString()).slice(-2048);
+      const url=`http://127.0.0.1:${port}`;
+      if(!output.includes(`OFFERSTRIKE_READY ${url}`) || ready) return;
       ready=true;clearTimeout(timer);resolve(url);
     });
+    // Drain diagnostics without forwarding potentially private provider responses.
+    worker.stderr.on('data',()=>{});
     worker.once('exit',()=>{
       clearTimeout(timer);
       if(child===worker) child=null;

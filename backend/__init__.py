@@ -1,0 +1,1 @@
+"""OfferStrike application backend."""

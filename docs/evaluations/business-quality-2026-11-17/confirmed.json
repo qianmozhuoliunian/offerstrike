@@ -1,0 +1,20 @@
+[
+  {
+    "id": "04",
+    "url": "https://www.cnblogs.com/jianrenfang/p/8697397.html",
+    "task_id": "b04bc893-3c0e-4321-9acc-e40367c3ade1",
+    "candidate_id": "a8d713c8-9bee-46ce-a391-8fdd22889a28",
+    "evidence": "5：说说HTTP（这个我当时说了好多，连请求报文，响应报文的格式啥的都说了，但是面试官还是不满意，然后我又强行瞎BB了好几分钟...）",
+    "author_confirmed": true,
+    "answer": "HTTP 本身会自动保存每个客户端的登录会话，所以服务端不需要 Cookie 或令牌。"
+  },
+  {
+    "id": "08",
+    "url": "https://www.cnblogs.com/WindrunnerMax/p/13986608.html",
+    "task_id": "42623809-6d4f-46dd-b83e-eaae7faa8143",
+    "candidate_id": "c5f1bcce-29c5-43f2-b397-8e208b53192f",
+    "evidence": "JavaScript基本数据类型。",
+    "author_confirmed": true,
+    "answer": "JavaScript 的基本数据类型只有字符串、数字和布尔。Symbol 和 BigInt 都是对象。"
+  }
+]

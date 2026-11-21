@@ -13,7 +13,7 @@ test('migration adopts unversioned data without promoting snippets and survives 
     db.exec(`CREATE TABLE sources (id TEXT PRIMARY KEY, title TEXT NOT NULL, url TEXT NOT NULL, date TEXT NOT NULL, type TEXT NOT NULL, question TEXT NOT NULL, role TEXT NOT NULL, created TEXT NOT NULL);
       INSERT INTO sources VALUES ('source','测试原帖','https://example.org/fixture','','来源未知','未核实摘要','产品','2026-01-01');`);
     migrateDatabase(db);
-    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 1);
+    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 3);
     assert.equal(db.prepare('SELECT count(*) AS total FROM questions').get().total, 0);
     assert.equal(db.prepare('SELECT question FROM sources').get().question, '未核实摘要');
     const question = addQuestion(db,'source','用户确认的问题');
@@ -48,4 +48,30 @@ test('migration rolls back schema work on failure and refuses a future database 
     assert.equal(db.prepare('PRAGMA user_version').get().user_version,99);
     assert.equal(db.prepare("SELECT count(*) AS total FROM sqlite_master WHERE type='table'").get().total,0);
   } finally { db.close(); }
+});
+
+test('version 1 practice records remain readable without a fabricated evaluation',()=>{
+  const db=new DatabaseSync(':memory:');
+  try {
+    migrateDatabase(db);
+    db.exec("DROP TABLE attempt_ability_evaluations; PRAGMA user_version=1; INSERT INTO attempts VALUES ('a','旧问题','旧回答','旧点评','产品','2026-01-01')");
+    migrateDatabase(db);
+    const backup=exportData(db);
+    assert.equal(backup.attempts[0].feedback,'旧点评');
+    assert.deepEqual(backup.ability_evaluations,[]);
+  } finally {db.close();}
+});
+test('version 2 ability evaluations survive migration to the training-task schema',()=>{
+  const db=new DatabaseSync(':memory:');
+  try {
+    migrateDatabase(db);
+    db.exec("DROP TABLE training_tasks; PRAGMA user_version=2; INSERT INTO attempts VALUES ('a','RAG 如何检索？','用向量相似度检索','已有点评','开发','2026-01-01')");
+    const evaluation={topic:'RAG',strengths:[{point:'检索方式',evidence:'用向量相似度检索'}],weaknesses:[],
+      unverified:[],followup_point:'',suggested_followup:'',recommended_action:'complete'};
+    db.prepare('INSERT INTO attempt_ability_evaluations VALUES (?,?)').run('a',JSON.stringify(evaluation));
+    migrateDatabase(db);
+    assert.equal(db.prepare('PRAGMA user_version').get().user_version,3);
+    assert.deepEqual(exportData(db).ability_evaluations,[{attempt_id:'a',evaluation}]);
+    assert.equal(db.prepare('SELECT count(*) AS count FROM training_tasks').get().count,0);
+  } finally {db.close();}
 });
